@@ -1,3 +1,5 @@
+"use client";
+
 import Image from "next/image";
 import { BRAND_ASSETS } from "@/lib/site";
 

@@ -4,6 +4,7 @@ import { useGSAP } from "@gsap/react";
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import {
+  ArrowRight,
   ArrowUpRight,
   BedDouble,
   Eye,
@@ -17,6 +18,7 @@ import {
   UtensilsCrossed,
   type LucideIcon,
 } from "lucide-react";
+import Link from "next/link";
 import { useRef, type CSSProperties, type ReactNode } from "react";
 import { FoldedA } from "@/components/brand/FoldedA";
 import { TELEGRAM_BOT_URL } from "@/lib/site";
@@ -119,9 +121,10 @@ const CHANNELS: Channel[] = [
   {
     name: "Web",
     icon: Globe,
-    status: "Coming soon",
-    live: false,
-    body: "Your web account is where linked channels meet. Web chat, memory review, and settings arrive with the web app.",
+    status: "Available now",
+    live: true,
+    body: "Chat in your browser with no sign-up. Memory review, settings, and channel linking arrive next.",
+    link: { label: "Open web chat", href: "/chat" },
   },
 ];
 
@@ -398,7 +401,12 @@ export function Sections() {
                   </div>
                   <h3 className="lp-cell-title mt-6">{c.name}</h3>
                   <p className="lp-cell-body mt-2">{c.body}</p>
-                  {c.link ? (
+                  {c.link?.href.startsWith("/") ? (
+                    <Link href={c.link.href} className="lp-text-link mt-auto">
+                      {c.link.label}
+                      <ArrowRight aria-hidden className="size-4" strokeWidth={1.5} />
+                    </Link>
+                  ) : c.link ? (
                     <a href={c.link.href} target="_blank" rel="noopener noreferrer" className="lp-text-link mt-auto">
                       {c.link.label}
                       <ArrowUpRight aria-hidden className="size-4" strokeWidth={1.5} />

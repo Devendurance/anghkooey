@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowUpRight, Menu, X } from "lucide-react";
+import { ArrowRight, ArrowUpRight, Menu, X } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useId, useState } from "react";
 import { NAV_LINKS, START_TALKING } from "@/lib/site";
@@ -114,7 +114,7 @@ export function SiteNav() {
               className="mt-2 w-full"
             >
               {START_TALKING.label}
-              <ArrowUpRight aria-hidden className="size-4" strokeWidth={1.5} />
+              <ArrowRight aria-hidden className="size-4" strokeWidth={1.5} />
             </ButtonLink>
           </div>
         </div>

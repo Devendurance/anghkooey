@@ -3,7 +3,8 @@
 import { useGSAP } from "@gsap/react";
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
-import { ArrowUpRight, Send } from "lucide-react";
+import { ArrowRight, Send } from "lucide-react";
+import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { BRAND_ASSETS, START_TALKING, TELEGRAM_BOT_URL } from "@/lib/site";
 import "./closing.css";
@@ -61,7 +62,7 @@ export function CtaBand() {
 
       <div className="lp-container lp-cta-inner">
         <div className="lp-cta-copy">
-          <p className="lp-cta-micro">Available now on Telegram</p>
+          <p className="lp-cta-micro">Available on the web and Telegram</p>
           <h2 id="cta-title" className="lp-cta-title">
             Remember what matters, when it matters.
           </h2>
@@ -70,17 +71,20 @@ export function CtaBand() {
             with your context instead of a blank slate.
           </p>
           <div className="flex flex-col items-start gap-4">
-            <a href={START_TALKING.href} target="_blank" rel="noopener noreferrer" className="lp-viewfinder">
+            <Link href={START_TALKING.href} className="lp-viewfinder">
               <i aria-hidden className="lp-vf lp-vf-tl" />
               <i aria-hidden className="lp-vf lp-vf-tr" />
               <i aria-hidden className="lp-vf lp-vf-bl" />
               <i aria-hidden className="lp-vf lp-vf-br" />
               Tell Anghkooey one thing
-              <ArrowUpRight aria-hidden className="size-4" strokeWidth={1.5} />
-              <span className="sr-only"> (opens @useanghkooey_bot on Telegram in a new tab)</span>
-            </a>
-            <p className="t-caption" aria-hidden>
-              Opens @useanghkooey_bot on Telegram
+              <ArrowRight aria-hidden className="size-4" strokeWidth={1.5} />
+            </Link>
+            <p className="t-caption">
+              Opens web chat. Prefer Telegram?{" "}
+              <a href={TELEGRAM_BOT_URL} target="_blank" rel="noopener noreferrer" className="lp-cta-alt">
+                Message @useanghkooey_bot
+                <span className="sr-only"> (opens Telegram in a new tab)</span>
+              </a>
             </p>
           </div>
         </div>

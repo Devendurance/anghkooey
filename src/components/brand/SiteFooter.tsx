@@ -71,8 +71,10 @@ export function SiteFooter() {
                 <li className="lp-footer-static">
                   iMessage <span className="lp-footer-tag">In testing</span>
                 </li>
-                <li className="lp-footer-static">
-                  Web chat <span className="lp-footer-tag">Coming soon</span>
+                <li>
+                  <Link href="/chat" className={linkCls}>
+                    Web chat
+                  </Link>
                 </li>
               </ul>
             </div>

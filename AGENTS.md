@@ -80,7 +80,10 @@
 - CSS Modules don't work here: the `*.css` turbopack rule in next.config.ts renames modules to plain global CSS. Use Tailwind or prefixed global classes (landing uses `lp-*` in `src/components/landing/landing.css`).
 - The dev server sometimes serves a stale `globals.css`. `touch src/app/globals.css` and reload.
 - Motion state lives on `<html data-motion data-intro>`, set by the boot script in `src/app/layout.tsx`. Base CSS must be the static/reduced layout. Cinematic rules opt in with `html[data-motion="full"]`.
-- Start Talking points at the Telegram bot (`src/lib/site.ts`) until `/chat` exists. Switch it there when the app route ships.
+- Start Talking points at `/chat` (`src/lib/site.ts`). Telegram stays linked as the alternative channel.
+- Web app nav comes from `APP_NAV` in `src/lib/site.ts`. Add a route only when its page exists.
+- Components with event handlers (e.g. `FoldedA` onError) need `"use client"` to be usable from server components like `AppShell`.
+- Only one `next dev` can run per repo dir. A long-running dev server keeps a stale cached env after server hotfixes. For live API checks use `next build && next start -p <port>`. Killing the exec shell doesn't stop `next start`, so stop the PID on that port.
 - `cacheComponents` is on: no `new Date()` in prerendered components (use constants).
 
 <!-- BEGIN:nextjs-agent-rules -->

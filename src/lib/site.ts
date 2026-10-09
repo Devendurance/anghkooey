@@ -1,12 +1,17 @@
 export const TELEGRAM_BOT_URL = "https://t.me/useanghkooey_bot";
 
-// Start Talking opens the live Telegram bot until the web /chat route ships.
+// Start Talking opens web chat. Telegram stays linked as the alternative channel.
 export const START_TALKING = {
   label: "Start Talking",
-  href: TELEGRAM_BOT_URL,
-  external: true,
-  hint: "Opens Anghkooey on Telegram",
+  href: "/chat",
+  external: false,
+  hint: "Chat in your browser, no sign-up",
 } as const;
+
+// Web app routes. Add an entry only when its page exists, so the nav never shows a dead link.
+export const APP_NAV = [{ key: "chat", label: "Chat", href: "/chat" }] as const;
+
+export const CONVERSATION_KEY_PREFIX = "ak:conv:";
 
 // `wide` links only fit the centred desktop pill from lg up; the mobile menu shows all.
 export const NAV_LINKS = [

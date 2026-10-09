@@ -229,6 +229,20 @@
   translate: 4px 4px;
 }
 
+.lp-cta-alt {
+  display: inline-block;
+  padding-block: 12px;
+  color: var(--color-cream);
+  text-decoration: underline;
+  text-decoration-color: var(--color-hairline-strong);
+  text-underline-offset: 4px;
+  transition: text-decoration-color 200ms ease;
+}
+
+.lp-cta-alt:hover {
+  text-decoration-color: var(--color-brand);
+}
+
 /* ---------- Edge HUD (desktop only) ---------- */
 
 .lp-hud {

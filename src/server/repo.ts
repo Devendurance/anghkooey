@@ -162,7 +162,7 @@ export async function saveRecentMessage(args: {
   const sql = getSql();
   await sql`
     insert into recent_messages (session_id, role, text, expires_at)
-    values (${args.sessionId}, ${args.role}, ${args.text.slice(0, 4000)}, now() + (${args.ttlHours ?? 24} * interval '1 hour'))`;
+    values (${args.sessionId}, ${args.role}, ${args.text.slice(0, 4000)}, now() + (${args.ttlHours ?? RECENT_MESSAGE_TTL_HOURS} * interval '1 hour'))`;
 }
 
 export async function getConsentAt(userId: string): Promise<string | null> {
@@ -269,6 +269,25 @@ export async function getConversationForUser(
   const sql = getSql();
   const rows = await sql`select 1 from conversation_sessions where id = ${conversationId} and user_id = ${userId} limit 1`;
   return rows.length > 0;
+}
+
+export const RECENT_MESSAGE_TTL_HOURS = 24;
+
+/** Unexpired transcript of one conversation, oldest first. Caller must check ownership. */
+export async function getConversationMessages(
+  sessionId: string,
+  limit = 100
+): Promise<{ role: "user" | "assistant"; text: string; createdAt: string }[]> {
+  const sql = getSql();
+  const rows = await sql`
+    select role, text, created_at from recent_messages
+    where session_id = ${sessionId} and expires_at > now()
+    order by created_at desc, (role = 'assistant') desc limit ${limit}`;
+  return rows.reverse().map((r) => ({
+    role: r.role as "user" | "assistant",
+    text: r.text as string,
+    createdAt: (r.created_at as Date).toISOString(),
+  }));
 }
 
 export async function getRecentMessages(

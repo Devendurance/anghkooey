@@ -55,6 +55,7 @@ export async function POST(req: Request) {
       conversationId: convId,
       memoryReceipts: result.memoryReceipts,
       saves: result.saves,
+      savedBlobIds: result.savedBlobIds,
       saveStatus:
         result.saves.completed > 0 ? "confirmed" : result.saves.failed > 0 ? "failed" : "none",
       consent,

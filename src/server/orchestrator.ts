@@ -43,6 +43,8 @@ export type ChatResult = {
   answer: string;
   memoryReceipts: MemoryReceipt[];
   saves: { completed: number; pending: number; failed: number };
+  /** Blob IDs returned by confirmed Walrus writes in this turn. */
+  savedBlobIds: string[];
   traceId: string;
   model: string;
 };
@@ -174,6 +176,7 @@ export async function handleMessage(input: HandleMessageInput): Promise<ChatResu
   // 4. Extract candidate durable facts with validated structured output.
   // Consent gate: no new Walrus writes without explicit user consent.
   const saves = { completed: 0, pending: 0, failed: 0 };
+  const savedBlobIds: string[] = [];
   const saveAllowed = input.allowMemorySave !== false;
   if (hasMemory() && saveAllowed) {
     try {
@@ -198,6 +201,7 @@ export async function handleMessage(input: HandleMessageInput): Promise<ChatResu
             idempotencyKey: idem,
           });
           saves.completed += 1;
+          savedBlobIds.push(saved.blobId);
           if (hasDb()) {
             try {
               await recordMemoryJob({
@@ -282,5 +286,5 @@ export async function handleMessage(input: HandleMessageInput): Promise<ChatResu
     })
   );
 
-  return { answer, memoryReceipts: receipts, saves, traceId, model };
+  return { answer, memoryReceipts: receipts, saves, savedBlobIds, traceId, model };
 }

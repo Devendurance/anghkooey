@@ -3,7 +3,7 @@
 import { useGSAP } from "@gsap/react";
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
-import { ArrowUpRight } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import { useRef, type CSSProperties } from "react";
 import { ButtonLink } from "@/components/brand/ButtonLink";
 import { FoldedA } from "@/components/brand/FoldedA";
@@ -264,7 +264,7 @@ export function Landing() {
                 <div data-reveal className="mt-8 flex flex-wrap items-center gap-x-5 gap-y-3">
                   <ButtonLink href={START_TALKING.href} external={START_TALKING.external} srHint={START_TALKING.hint}>
                     {START_TALKING.label}
-                    <ArrowUpRight aria-hidden className="size-4" strokeWidth={1.5} />
+                    <ArrowRight aria-hidden className="size-4" strokeWidth={1.5} />
                   </ButtonLink>
                   <span className="t-caption" aria-hidden>
                     {START_TALKING.hint}
