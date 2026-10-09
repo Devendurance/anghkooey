@@ -15,6 +15,7 @@ import {
   DuplicateDeliveryError,
   filterSuperseded,
   findActiveBlobForKey,
+  getMemoryForUsers,
   getRecentMessages,
   getSupersededIds,
   isDuplicateDeliveryError,
@@ -218,20 +219,53 @@ export async function handleMessage(input: HandleMessageInput): Promise<ChatResu
                 category: f.category,
               });
               // Correction: retire prior active blobs for the same key only
-              // after the new blob is confirmed.
-              const prior = f.correction_of
-                ? [f.correction_of]
-                : await findActiveBlobForKey(input.canonicalUserId, f.memory_key).catch(
-                    () => [] as string[]
+              // after the new blob is confirmed. Search the canonical +
+              // merged alias set so a preference first saved through a
+              // linked channel is retired under its real owner. Blob ids
+              // outside the alias set are never touched.
+              try {
+                const { getAliasUserIds } = await import("./linking");
+                const aliasIds = await getAliasUserIds(input.canonicalUserId).catch(() => [
+                  input.canonicalUserId,
+                ]);
+                const priors: { blobId: string; ownerId: string }[] = [];
+                if (f.correction_of) {
+                  const owned = await getMemoryForUsers(aliasIds, f.correction_of).catch(() => null);
+                  if (owned && owned.state === "active") {
+                    priors.push({ blobId: owned.blobId, ownerId: owned.userId });
+                  } else {
+                    // Fall back to key search inside the alias set; an
+                    // unknown or foreign correction_of never retires others.
+                    const per = await Promise.all(
+                      aliasIds.map((uid) =>
+                        findActiveBlobForKey(uid, f.memory_key).catch(() => [] as string[])
+                      )
+                    );
+                    aliasIds.forEach((uid, i) => {
+                      for (const b of per[i]) priors.push({ blobId: b, ownerId: uid });
+                    });
+                  }
+                } else {
+                  const per = await Promise.all(
+                    aliasIds.map((uid) =>
+                      findActiveBlobForKey(uid, f.memory_key).catch(() => [] as string[])
+                    )
                   );
-              for (const old of prior) {
-                if (old !== saved.blobId) {
-                  await markSuperseded({
-                    oldBlobId: old,
-                    newBlobId: saved.blobId,
-                    userId: input.canonicalUserId,
-                  }).catch(() => {});
+                  aliasIds.forEach((uid, i) => {
+                    for (const b of per[i]) priors.push({ blobId: b, ownerId: uid });
+                  });
                 }
+                for (const old of priors) {
+                  if (old.blobId !== saved.blobId) {
+                    await markSuperseded({
+                      oldBlobId: old.blobId,
+                      newBlobId: saved.blobId,
+                      userId: old.ownerId,
+                    }).catch(() => {});
+                  }
+                }
+              } catch {
+                // Metadata retry can follow; the Walrus write is confirmed.
               }
             } catch {
               // Job is confirmed on Walrus; metadata retry can follow.

@@ -14,10 +14,8 @@ import {
 export async function POST(req: Request) {
   const originErr = checkOrigin(req);
   if (originErr) return originErr;
-  const rl = await checkRateLimit(`session:create:${clientIp(req)}`, 10, 60_000);
-  if (!rl.allowed) {
-    return err(429, "rate_limited", rateLimitedResponse().error.message);
-  }
+  // Reuse a valid returning session before spending new-account quota, so
+  // normal navigation does not consume the creation rate limit.
   try {
     const existing = getCookieToken(req);
     if (existing) {
@@ -31,6 +29,10 @@ export async function POST(req: Request) {
           reused: true,
         });
       }
+    }
+    const rl = await checkRateLimit(`session:create:${clientIp(req)}`, 10, 60_000);
+    if (!rl.allowed) {
+      return err(429, "rate_limited", rateLimitedResponse().error.message);
     }
     const created = await createWebSession();
     return ok(
