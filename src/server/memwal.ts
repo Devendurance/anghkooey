@@ -99,15 +99,106 @@ function hash12(v: string): string {
   return (h >>> 0).toString(16).padStart(8, "0");
 }
 
+/**
+ * Exact init stage where client creation failed. Enumerated and safe to log:
+ * never carries keys, messages, or stack traces.
+ */
+export type MemwalInitStage =
+  | "module_import_failed"
+  | "dependency_resolution_failed"
+  | "environment_invalid"
+  | "key_format_invalid"
+  | "sdk_client_creation_failed";
+
+/** Pure stage decision for a failed dynamic import. Safe to unit test. */
+export function stageForImportError(message: string): MemwalInitStage {
+  return /exports map|ERR_PACKAGE_PATH_NOT_EXPORTED|Cannot find module|ERR_MODULE_NOT_FOUND|dependency/i.test(
+    message
+  )
+    ? "dependency_resolution_failed"
+    : "module_import_failed";
+}
+
+/** Pure stage decision for a failed MemWal.create call. Safe to unit test. */
+export function stageForCreateError(message: string): MemwalInitStage {
+  return /private key|secret key|normalize|bech32|suiprivkey|\bhex\b|\bseed\b|mnemonic|passphrase|key length|key format|invalid key/i.test(
+    message
+  )
+    ? "key_format_invalid"
+    : "sdk_client_creation_failed";
+}
+
+function errorName(e: unknown): string {
+  // Constructor name only (e.g. "Error", "TypeError"). Safe to log.
+  return e instanceof Error ? e.constructor.name.slice(0, 32) : typeof e;
+}
+
+function stageError(e: unknown, stage: MemwalInitStage): unknown {
+  const c = classifyMemwalError(e);
+  // Stage determines the category for init-phase faults: bundling/import
+  // problems and key problems are init faults, missing env is config.
+  const category: MemwalFailureCategory =
+    stage === "environment_invalid"
+      ? "config"
+      : stage === "module_import_failed" ||
+          stage === "dependency_resolution_failed" ||
+          stage === "key_format_invalid" ||
+          stage === "sdk_client_creation_failed"
+        ? "init"
+        : c.category;
+  const diagnosis: Omit<MemwalDiagnosis, "durationMs"> = {
+    category,
+    httpStatus: c.httpStatus,
+    code: c.code,
+    retryable: false,
+  };
+  if (e instanceof Error) {
+    (e as { stage?: MemwalInitStage }).stage = stage;
+    (e as { diagnosis?: Omit<MemwalDiagnosis, "durationMs"> }).diagnosis = diagnosis;
+    return e;
+  }
+  const wrapped = new Error(`MemWal init failed: ${stage}`);
+  (wrapped as { stage?: MemwalInitStage }).stage = stage;
+  (wrapped as { diagnosis?: Omit<MemwalDiagnosis, "durationMs"> }).diagnosis = diagnosis;
+  return wrapped;
+}
+
 export async function createMemoryClient(namespace?: string): Promise<MemWalType> {
-  const { MemWal } = await loadMemWal();
-  const env = getEnv();
-  return MemWal.create({
-    key: env.MEMWAL_PRIVATE_KEY,
-    accountId: env.MEMWAL_ACCOUNT_ID,
-    serverUrl: env.MEMWAL_SERVER_URL,
-    ...(namespace ? { namespace } : {}),
-  });
+  // Stage 1: dynamic MemWal module import. Under Next.js server bundling a
+  // mis-transformed ESM-only import fails here, before any env is touched.
+  let MemWalCtor: Awaited<ReturnType<typeof loadMemWal>>["MemWal"];
+  try {
+    ({ MemWal: MemWalCtor } = await loadMemWal());
+  } catch (e) {
+    throw stageError(e, stageForImportError(e instanceof Error ? e.message : String(e ?? "")));
+  }
+  // Stage 2: environment loading and validation. Throws when a required
+  // MEMWAL_ value is missing or malformed. Never logs the values.
+  let privateKey: string;
+  let accountId: string;
+  let serverUrl: string;
+  try {
+    const env = getEnv();
+    privateKey = env.MEMWAL_PRIVATE_KEY;
+    accountId = env.MEMWAL_ACCOUNT_ID;
+    serverUrl = env.MEMWAL_SERVER_URL;
+  } catch (e) {
+    throw stageError(e, "environment_invalid");
+  }
+  // Stage 3: SDK client creation and private-key normalization. The SDK
+  // accepts hex (with or without 0x), suiprivkey1 bech32, or raw bytes;
+  // anything else (quotes, whitespace, truncation, wrong key) fails here
+  // with no HTTP request. The raw message is never logged.
+  try {
+    return MemWalCtor.create({
+      key: privateKey,
+      accountId,
+      serverUrl,
+      ...(namespace ? { namespace } : {}),
+    });
+  } catch (e) {
+    throw stageError(e, stageForCreateError(e instanceof Error ? e.message : String(e ?? "")));
+  }
 }
 
 export async function saveFact(args: {
@@ -148,14 +239,18 @@ export async function recallFacts(args: {
   try {
     client = await createMemoryClient(namespace);
   } catch (e) {
-    const c = classifyMemwalError(e);
-    const diagnosis: MemwalDiagnosis = { ...c, durationMs: Date.now() - started };
+    const c =
+      (e as { diagnosis?: Omit<MemwalDiagnosis, "durationMs"> }).diagnosis ?? classifyMemwalError(e);
+    const diagnosis: MemwalDiagnosis = { ...c, retryable: false, durationMs: Date.now() - started };
     (e as { diagnosis?: MemwalDiagnosis }).diagnosis = diagnosis;
-    // Sanitized: op, category, status, code, duration. No query, no keys, no UUIDs.
+    // Sanitized: enumerated stage plus error name only. No raw messages,
+    // no stacks, no query text, no keys, no UUIDs.
     console.error(
       JSON.stringify({
         op: "memwal_recall",
         phase: "init",
+        stage: ((e as { stage?: MemwalInitStage }).stage ?? "sdk_client_creation_failed"),
+        error: errorName(e),
         category: diagnosis.category,
         httpStatus: diagnosis.httpStatus ?? null,
         code: diagnosis.code ?? null,
