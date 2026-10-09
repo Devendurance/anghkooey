@@ -18,6 +18,10 @@
   --color-amber: #f6b25b;
   --color-flare: #ffe9c2;
   --color-ember: #e8602c;
+  --color-footer-ground: #101214;
+  --color-footer-link: #e9e3d3;
+  --color-footer-muted: #9c978b;
+  --color-footer-line: rgb(233 227 211 / 0.14);
 
   --ease-lid: cubic-bezier(0.65, 0, 0.15, 1);
   --ease-out-soft: cubic-bezier(0.16, 1, 0.3, 1);

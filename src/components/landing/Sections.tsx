@@ -18,9 +18,8 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { useRef, type CSSProperties, type ReactNode } from "react";
-import { ButtonLink } from "@/components/brand/ButtonLink";
 import { FoldedA } from "@/components/brand/FoldedA";
-import { START_TALKING, TELEGRAM_BOT_URL } from "@/lib/site";
+import { TELEGRAM_BOT_URL } from "@/lib/site";
 import "./sections.css";
 
 gsap.registerPlugin(ScrollTrigger, useGSAP);
@@ -440,16 +439,6 @@ export function Sections() {
               </li>
             ))}
           </ol>
-
-          <div data-sr className="mt-16 flex flex-wrap items-center gap-x-5 gap-y-3">
-            <ButtonLink href={START_TALKING.href} external={START_TALKING.external} srHint={START_TALKING.hint}>
-              {START_TALKING.label}
-              <ArrowUpRight aria-hidden className="size-4" strokeWidth={1.5} />
-            </ButtonLink>
-            <span className="t-caption" aria-hidden>
-              {START_TALKING.hint}
-            </span>
-          </div>
         </div>
       </section>
     </div>

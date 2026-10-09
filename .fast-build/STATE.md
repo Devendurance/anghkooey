@@ -13,13 +13,14 @@
 ## Frontend stages (landing)
 - [x] 4A: brand foundation + folded-A intro + cinematic orb hero + wordmark dock + hero copy + Start Talking
 - [x] 4B: storytelling sections (memory story + how-it-works spotlight, everyday-experiences bento, channel continuity, privacy and control)
-- [ ] 4C: CTA band + footer (Image B), bottom HUD
+- [x] 4C: CTA band + footer (Image B) + desktop edge HUD. Landing page complete.
 - [ ] App: /chat, /memories, /settings on existing API
 
 ## Current slice
-- 4B done. Next: 4C.
+- 4C done. Landing complete. Next: web app (/chat first).
 
 ## Completed
+- 4C (2026-10-09): CtaBand + BottomHud in src/components/landing/Closing.tsx + closing.css; SiteFooter in src/components/brand/SiteFooter.tsx + footer.css; rendered from Landing.tsx (old placeholder footer removed from page.tsx). CTA ribbon = owner-supplied render, public/brand/anghkooey/web/cta-ribbon.webp (1024x576, 40KB, lazy, screen blend + feathered masks), slot in BRAND_ASSETS.ribbon accepts transparent WebP/PNG; CSS conic-ring fallback on load error. Viewfinder CTA "Tell Anghkooey one thing" -> Telegram, destination stated. Footer: real links only (anchors, Telegram, GitHub repo); iMessage "In testing", Web chat "Coming soon" as plain text; no legal pages exist so none linked. HUD desktop-only (>=1024): Telegram button, section counter, dot pager; hidden over hero and footer (visibility hidden, not focusable). No sound toggle (no audio). Duplicate Start Talking row removed from #control. Browser-checked 360/390/768/1280/1440, menu, pager keyboard, reduced motion, ribbon fallback, no overflow.
 - 4B (2026-10-09): src/components/landing/Sections.tsx + sections.css, rendered after the hero in Landing.tsx. Sections #story, #experiences, #channels, #control. t-h2/t-h3 in globals.css. Nav pill adds How it works + Privacy from lg up (NAV_LINKS.wide). Motion: ScrollTrigger.batch entrances (show-only, never re-hide), lens drift, spokes clip reveal; reduced motion and no-JS show everything static. Channel status is honest: Telegram available, iMessage in testing (no public number), Web coming soon. Bento lenses are original CSS art, no third-party images. FoldedA hides itself on load error. Browser-checked 360/390/768/1280/1440, reverse scroll, keyboard focus reveal, reduced motion, asset failure, no horizontal overflow.
 - Repo published (2026-10-09): https://github.com/Devendurance/anghkooey, branch main. Commits: deps/config 245a24f, backend+Photon 224b9ed, 4A bd88d96, orb polish eb3beac, typecheck typegen 6b13b1e.
 - 4A polish: CSS orb relit (sun point clear of wordmark, rim glare, deeper sky, grass grain). Supplied figure-in-orb reference evaluated locally only: rights unconfirmed and too low-res, not committed.
@@ -56,4 +57,4 @@
 - No orb video supplied: orb is CSS art. Production orb loop still missing.
 
 ## Next action
-- Frontend 4C (CTA band, footer, bottom HUD). Owner: reverse-direction recall check and 3x10 evidence still pending.
+- Web app /chat on existing API, then point START_TALKING at it (src/lib/site.ts). Owner: reverse-direction recall check and 3x10 evidence still pending. Wanted assets: higher-res ribbon (>=2400px, transparent), production orb loop.

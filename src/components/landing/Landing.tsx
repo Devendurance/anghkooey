@@ -14,6 +14,8 @@ import { APERTURE_OPEN, Aperture, drawAperture } from "./Aperture";
 import { Orb } from "./Orb";
 import { Ornaments } from "./Ornaments";
 import { Sections } from "./Sections";
+import { BottomHud, CtaBand } from "./Closing";
+import { SiteFooter } from "@/components/brand/SiteFooter";
 import "./landing.css";
 
 gsap.registerPlugin(ScrollTrigger, useGSAP);
@@ -303,7 +305,10 @@ export function Landing() {
         </section>
 
         <Sections />
+        <CtaBand />
       </main>
+      <SiteFooter />
+      <BottomHud />
     </div>
   );
 }

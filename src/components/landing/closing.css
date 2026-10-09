@@ -1,0 +1,370 @@
+/*
+ * Stage 4C: CTA band [B] and the desktop edge HUD.
+ * The ribbon slot accepts the supplied render or any transparent WebP/PNG.
+ */
+
+.lp-cta {
+  position: relative;
+  z-index: 1;
+  overflow: hidden;
+  background: var(--color-night);
+  border-bottom: 1px solid var(--color-footer-line);
+  isolation: isolate;
+}
+
+/* Restrained film grain over the band. */
+.lp-cta::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  opacity: 0.05;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  pointer-events: none;
+}
+
+.lp-cta-art {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+/* Keeps the copy column on clean Night whatever the art does. */
+.lp-cta-art::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, var(--color-night) 28%, rgb(5 8 15 / 0) 58%);
+}
+
+.lp-ribbon {
+  position: absolute;
+  top: -4%;
+  right: -10%;
+  width: min(80vw, 1180px);
+  aspect-ratio: 16 / 9;
+  transform-origin: 70% 50%;
+}
+
+.lp-ribbon img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: var(--ribbon-focus, 60% 50%);
+  /* Screen drops a black ground into Night; transparent renders pass through unchanged. */
+  mix-blend-mode: screen;
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 30%), linear-gradient(0deg, transparent 6%, #000 46%);
+  mask-image: linear-gradient(90deg, transparent, #000 30%), linear-gradient(0deg, transparent 6%, #000 46%);
+  -webkit-mask-composite: source-in;
+  mask-composite: intersect;
+  user-select: none;
+}
+
+/* Original CSS stand-in if the art fails to load. */
+.lp-ribbon-fallback {
+  position: absolute;
+  inset: 14% 6% 4% 14%;
+  border-radius: 50%;
+  border: 22px solid transparent;
+  background: conic-gradient(from 200deg, #3f4e9a, #e5533d, #e0916a, #52a59c, #3f7bc4, #3f4e9a) border-box;
+  -webkit-mask: linear-gradient(#000 0 0) padding-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) padding-box exclude, linear-gradient(#000 0 0);
+  rotate: -14deg;
+  opacity: 0.7;
+}
+
+.lp-cta-inner {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  min-height: min(100svh, 720px);
+  padding-block: 120px;
+}
+
+.lp-cta-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  max-width: 36rem;
+}
+
+.lp-cta-micro {
+  font-family: var(--font-ui);
+  font-size: 16px;
+  line-height: 24px;
+  color: var(--color-cream-70);
+}
+
+.lp-cta-title {
+  font-family: var(--font-ui);
+  font-weight: 300;
+  font-size: 36px;
+  line-height: 40px;
+  letter-spacing: -0.02em;
+  color: var(--color-cream);
+  text-wrap: balance;
+}
+
+@media (min-width: 640px) {
+  .lp-cta-title {
+    font-size: 46px;
+    line-height: 50px;
+  }
+}
+
+@media (min-width: 1024px) {
+  .lp-cta-title {
+    font-size: 56px;
+    line-height: 60px;
+  }
+}
+
+/* Stacked: the ribbon crowns the band and the copy sits below it. */
+@media (max-width: 1023px) {
+  .lp-cta-art::after {
+    background: linear-gradient(180deg, rgb(5 8 15 / 0) 40%, var(--color-night) 72%);
+  }
+  .lp-ribbon {
+    top: 0;
+    right: -34%;
+    width: 150vw;
+  }
+  .lp-ribbon img {
+    -webkit-mask-image: linear-gradient(90deg, transparent, #000 22%), linear-gradient(0deg, transparent, #000 30%);
+    mask-image: linear-gradient(90deg, transparent, #000 22%), linear-gradient(0deg, transparent, #000 30%);
+  }
+  .lp-cta-inner {
+    min-height: 0;
+    padding-top: 64vw;
+    padding-bottom: 72px;
+  }
+}
+
+@media (min-width: 640px) and (max-width: 1023px) {
+  .lp-ribbon {
+    right: -22%;
+    width: 118vw;
+  }
+  .lp-cta-inner {
+    padding-top: 52vw;
+    padding-bottom: 96px;
+  }
+}
+
+/* Viewfinder button [B]. */
+.lp-viewfinder {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 48px;
+  padding: 0 22px;
+  border-radius: 2px;
+  background: rgb(244 238 223 / 0.16);
+  box-shadow: 0 0 24px rgb(255 255 255 / 0.12);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  color: #fff;
+  transition: background-color 200ms var(--ease-out-soft);
+}
+
+.lp-viewfinder:hover {
+  background: rgb(244 238 223 / 0.24);
+}
+
+.lp-vf {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  border: 0 solid var(--color-cream-70);
+  transition: translate 200ms var(--ease-out-soft);
+}
+
+.lp-vf-tl {
+  top: -4px;
+  left: -4px;
+  border-top-width: 1px;
+  border-left-width: 1px;
+}
+
+.lp-vf-tr {
+  top: -4px;
+  right: -4px;
+  border-top-width: 1px;
+  border-right-width: 1px;
+}
+
+.lp-vf-bl {
+  bottom: -4px;
+  left: -4px;
+  border-bottom-width: 1px;
+  border-left-width: 1px;
+}
+
+.lp-vf-br {
+  right: -4px;
+  bottom: -4px;
+  border-bottom-width: 1px;
+  border-right-width: 1px;
+}
+
+.lp-viewfinder:is(:hover, :focus-visible) .lp-vf-tl {
+  translate: -4px -4px;
+}
+
+.lp-viewfinder:is(:hover, :focus-visible) .lp-vf-tr {
+  translate: 4px -4px;
+}
+
+.lp-viewfinder:is(:hover, :focus-visible) .lp-vf-bl {
+  translate: -4px 4px;
+}
+
+.lp-viewfinder:is(:hover, :focus-visible) .lp-vf-br {
+  translate: 4px 4px;
+}
+
+/* ---------- Edge HUD (desktop only) ---------- */
+
+.lp-hud {
+  display: none;
+}
+
+@media (min-width: 1024px) {
+  .lp-hud {
+    display: block;
+    opacity: 0;
+    visibility: hidden;
+    transition:
+      opacity 300ms var(--ease-out-soft),
+      visibility 0s linear 300ms;
+  }
+  .lp-hud[data-show] {
+    opacity: 1;
+    visibility: visible;
+    transition: opacity 300ms var(--ease-out-soft);
+  }
+}
+
+.lp-hud-left {
+  position: fixed;
+  left: 40px;
+  bottom: 24px;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 4px 14px 4px 4px;
+  border-radius: 9999px;
+  border: 1px solid var(--color-hairline);
+  background: rgb(5 8 15 / 0.88);
+}
+
+.lp-hud-btn {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 1px solid var(--color-hairline);
+  background: var(--color-glass);
+  color: var(--color-cream);
+  transition: border-color 200ms var(--ease-out-soft);
+}
+
+.lp-hud-btn:hover {
+  border-color: var(--color-hairline-strong);
+}
+
+.lp-hud-count {
+  display: flex;
+  align-items: baseline;
+  font-family: var(--font-label);
+  font-size: 12px;
+  line-height: 16px;
+  letter-spacing: 0.14em;
+  color: var(--color-cream-55);
+}
+
+.lp-hud-name {
+  margin-left: 12px;
+  text-transform: uppercase;
+}
+
+.lp-pager {
+  position: fixed;
+  right: 12px;
+  top: 50%;
+  z-index: 40;
+  translate: 0 -50%;
+}
+
+.lp-pager ul {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.lp-pager-dot {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+}
+
+.lp-pager-dot::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--color-cream-35);
+  transition: background-color 200ms var(--ease-out-soft);
+}
+
+.lp-pager-dot[aria-current]::before {
+  background: var(--color-cream);
+  box-shadow:
+    0 0 0 2px var(--color-night),
+    0 0 0 3px var(--color-hairline-strong);
+}
+
+.lp-pager-tip {
+  position: absolute;
+  right: 30px;
+  padding: 4px 10px;
+  border-radius: 9999px;
+  background: rgb(5 8 15 / 0.9);
+  border: 1px solid var(--color-hairline);
+  font-family: var(--font-label);
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: var(--color-cream);
+  opacity: 0;
+  translate: 4px 0;
+  transition:
+    opacity 200ms var(--ease-out-soft),
+    translate 200ms var(--ease-out-soft);
+  pointer-events: none;
+}
+
+.lp-pager-dot:is(:hover, :focus-visible) .lp-pager-tip {
+  opacity: 1;
+  translate: 0 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lp-vf,
+  .lp-pager-tip,
+  .lp-hud {
+    transition: none;
+  }
+}
