@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "next typegen && tsc --noEmit",
     "test": "vitest run",
     "migrate": "tsx scripts/migrate.ts",
     "check:integrations": "tsx scripts/check-integrations.ts",
