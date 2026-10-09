@@ -11,11 +11,13 @@ import { recallFacts, saveFact } from "./memwal";
 import { assertUUID } from "./namespace";
 import { buildGroundedMessages, type MemoryHit } from "./prompts";
 import {
-  checkInboundEvent,
+  claimInboundEvent,
+  DuplicateDeliveryError,
   filterSuperseded,
   findActiveBlobForKey,
   getRecentMessages,
   getSupersededIds,
+  isDuplicateDeliveryError,
   markInboundEvent,
   markSuperseded,
   recordMemoryActive,
@@ -80,12 +82,14 @@ export async function handleMessage(input: HandleMessageInput): Promise<ChatResu
 
   if (hasDb()) {
     try {
-      if (await checkInboundEvent(provider, eventId)) {
-        throw new Error("Duplicate delivery: already processed");
+      // Atomic claim: exactly one concurrent worker owns this delivery.
+      // A duplicate throws a typed signal so the caller stays silent
+      // instead of sending a second user-visible reply.
+      if ((await claimInboundEvent(provider, eventId)) === "duplicate") {
+        throw new DuplicateDeliveryError(eventId);
       }
-      await markInboundEvent(provider, eventId, "processing");
     } catch (e) {
-      if (e instanceof Error && e.message.startsWith("Duplicate delivery")) throw e;
+      if (isDuplicateDeliveryError(e)) throw e;
       // DB down: continue without idempotency rather than dropping the chat.
     }
   }

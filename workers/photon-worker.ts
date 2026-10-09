@@ -8,6 +8,7 @@ import { cancelMerge, confirmLink, confirmMerge, requestMerge } from "../src/ser
 import { handleMessage } from "../src/server/orchestrator";
 import { getConsentAt, listMemories, setConsent } from "../src/server/repo";
 import { checkRateLimit } from "../src/server/rate-limit";
+import { isDuplicateDeliveryError } from "../src/server/repo";
 
 function need(name: string): string {
   const v = process.env[name];
@@ -236,19 +237,38 @@ async function main() {
         })
       );
     } catch (e) {
-      try {
-        await space.send("Something went wrong on my side. Please try again in a moment.");
-      } catch {
-        // best effort
+      if (isDuplicateDeliveryError(e)) {
+        // Expected idempotency: another worker owns this delivery and
+        // sends the one user-visible reply. Stay silent here.
+        const dupPlatform =
+          message.platform === "telegram"
+            ? "telegram"
+            : message.platform === "imessage"
+              ? "imessage"
+              : "unknown";
+        console.log(
+          JSON.stringify({
+            worker: "photon",
+            event: "duplicate_delivery",
+            platform: dupPlatform,
+            latency_ms: Date.now() - started,
+          })
+        );
+      } else {
+        try {
+          await space.send("Something went wrong on my side. Please try again in a moment.");
+        } catch {
+          // best effort
+        }
+        const msg = e instanceof Error ? e.message : String(e);
+        console.error(
+          JSON.stringify({
+            worker: "photon",
+            error: msg.slice(0, 200),
+            transient: /fetch failed|timeout|abort|econn|socket/i.test(msg),
+          })
+        );
       }
-      const msg = e instanceof Error ? e.message : String(e);
-      console.error(
-        JSON.stringify({
-          worker: "photon",
-          error: msg.slice(0, 200),
-          transient: /fetch failed|timeout|abort|econn|socket/i.test(msg),
-        })
-      );
     }
   }
 }

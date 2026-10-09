@@ -11,6 +11,49 @@ export function isDuplicateInboundStatus(status: string | null): boolean {
   return status === "processing" || status === "done" || status === "processed";
 }
 
+export class DuplicateDeliveryError extends Error {
+  readonly code = "duplicate_delivery";
+  constructor(eventId?: string) {
+    super(`Duplicate delivery: already processed${eventId ? ` (${eventId})` : ""}`);
+    this.name = "DuplicateDeliveryError";
+  }
+}
+
+/**
+ * True only for expected idempotency signals. Never true for genuine
+ * DeepSeek, Walrus, database or outbound-message failures.
+ */
+export function isDuplicateDeliveryError(e: unknown): boolean {
+  if (e instanceof DuplicateDeliveryError) return true;
+  return e instanceof Error && e.message.startsWith("Duplicate delivery");
+}
+
+/**
+ * Atomically claim an inbound event. Exactly one concurrent claimant wins.
+ * - "claimed": caller owns the event and must finish it (done/failed).
+ * - "duplicate": another attempt is processing or done; caller must
+ *   stay silent so the user sees exactly one response.
+ * Failed events are claimable for retry. Successful or active processing
+ * events are never reset by a competing claimant.
+ */
+export async function claimInboundEvent(
+  provider: string,
+  providerEventId: string
+): Promise<"claimed" | "duplicate"> {
+  const sql = getSql();
+  const inserted = (await sql`
+    insert into inbound_events (provider, provider_event_id, status)
+    values (${provider}, ${providerEventId}, 'processing')
+    on conflict (provider, provider_event_id) do nothing
+    returning status`) as { status: string }[];
+  if (inserted.length > 0) return "claimed";
+  const retried = (await sql`
+    update inbound_events set status = 'processing'
+    where provider = ${provider} and provider_event_id = ${providerEventId} and status = 'failed'
+    returning status`) as { status: string }[];
+  return retried.length > 0 ? "claimed" : "duplicate";
+}
+
 export async function checkInboundEvent(
   provider: string,
   providerEventId: string
