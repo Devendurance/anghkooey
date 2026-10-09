@@ -36,5 +36,3 @@ export const BRAND_ASSETS = {
 export const REPO_URL = "https://github.com/Devendurance/anghkooey";
 
 export const COPYRIGHT_YEAR = 2026;
-
-export const INTRO_SEEN_KEY = "ak:intro-seen";

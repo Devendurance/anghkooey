@@ -1,7 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Cormorant_Garamond, Georama } from "next/font/google";
 import localFont from "next/font/local";
-import { INTRO_SEEN_KEY } from "@/lib/site";
 import "./globals.css";
 
 const cormorant = Cormorant_Garamond({
@@ -37,7 +36,8 @@ export const viewport: Viewport = {
 };
 
 // Runs before first paint so the intro and motion states never flash.
-const MOTION_BOOT = `(function(){try{var d=document.documentElement;var r=window.matchMedia("(prefers-reduced-motion: reduce)").matches;d.dataset.motion=r?"reduced":"full";var s=null;try{s=localStorage.getItem(${JSON.stringify(INTRO_SEEN_KEY)})}catch(e){}d.dataset.intro=!r&&!s?"play":"skip"}catch(e){}})();`;
+// Every homepage navigation replays the full intro; only reduced-motion skips it.
+const MOTION_BOOT = `(function(){try{var d=document.documentElement;var r=window.matchMedia("(prefers-reduced-motion: reduce)").matches;d.dataset.motion=r?"reduced":"full";d.dataset.intro=r?"skip":"play"}catch(e){}})();`;
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (

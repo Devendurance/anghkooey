@@ -9,7 +9,7 @@ import { ButtonLink } from "@/components/brand/ButtonLink";
 import { FoldedA } from "@/components/brand/FoldedA";
 import { SiteNav } from "@/components/brand/SiteNav";
 import { Wordmark } from "@/components/brand/Wordmark";
-import { BRAND_ASSETS, INTRO_SEEN_KEY, START_TALKING } from "@/lib/site";
+import { BRAND_ASSETS, START_TALKING } from "@/lib/site";
 import { APERTURE_OPEN, Aperture, drawAperture } from "./Aperture";
 import { Orb } from "./Orb";
 import { Ornaments } from "./Ornaments";
@@ -33,6 +33,7 @@ const maskStyle: CSSProperties = {
 export function Landing() {
   const root = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<ScrollTrigger | null>(null);
+  const skipRef = useRef<() => void>(() => {});
 
   useGSAP(
     () => {
@@ -51,23 +52,60 @@ export function Landing() {
         // Past maxScroll so the backdrop stays on at the very bottom of the page.
         end: () => ScrollTrigger.maxScroll(window) + 100,
       });
-      if (!full) return;
+      // Reduced motion: skip the cinematic sequence, show the usable hero immediately.
+      if (!full) {
+        html.dataset.intro = "done";
+        return;
+      }
 
       // ---------- Intro: darkness -> recognition -> revelation ----------
-      const finishIntro = () => {
-        html.dataset.intro = "done";
-        try {
-          localStorage.setItem(INTRO_SEEN_KEY, "1");
-        } catch {}
-        removeSkip();
-      };
-      let removeSkip = () => {};
+      // Every homepage mount replays the full sequence. No localStorage gate.
+      // Runs once per mount (useGSAP layout effect, before paint) so there is
+      // no flash of underlying content. Tab focus alone never retriggers.
+      let prevRestoration: ScrollRestoration | null = null;
+      try {
+        prevRestoration = history.scrollRestoration;
+        history.scrollRestoration = "manual";
+      } catch {}
+      // Eligible navigations start at the top so scroll restoration never hides the intro.
+      window.scrollTo(0, 0);
 
-      if (html.dataset.intro === "play") {
+      let introTl: gsap.core.Timeline | null = null;
+      let removeSkip = () => {};
+      let disposed = false;
+
+      const finishIntro = () => {
+        if (html.dataset.intro !== "play") {
+          removeSkip();
+          return;
+        }
+        html.dataset.intro = "done";
+        removeSkip();
+        const active = document.activeElement as HTMLElement | null;
+        if (active?.hasAttribute?.("data-skip")) active.blur();
+      };
+
+      const buildIntro = () => {
+        introTl?.kill();
+        removeSkip();
+        // Wipe inline styles left by a previous run so a bfcache replay starts clean.
+        gsap.set(
+          q(
+            "[data-intro-mark],[data-intro-base],[data-intro-light],[data-intro-full],[data-intro-glow],[data-intro-reflect],[data-orb-intro],[data-wm-intro],[data-wm-img],[data-nav],[data-hint]",
+          ),
+          { clearProps: "all" },
+        );
         const ap = one<SVGSVGElement>("[data-intro-ap]");
+        drawAperture(ap, 0, 0);
+        gsap.set(q("[data-intro-ap] [data-ap-edge]"), { opacity: 0 });
+        // Set synchronously before paint: the fixed overlay covers the hero.
+        html.dataset.intro = "play";
+        window.scrollTo(0, 0);
+
         const lens = { a: 0, b: 0 };
         const drawLens = () => drawAperture(ap, lens.a, lens.b);
         const tl = gsap.timeline({ onComplete: finishIntro });
+        introTl = tl;
         tl.fromTo(one("[data-intro-base]"), { opacity: 0, scale: 0.97 }, { opacity: 0.22, scale: 1, duration: 0.9, ease: "power2.out" }, 0.2)
           .fromTo(one("[data-intro-light]"), { backgroundPosition: "130% 0%" }, { backgroundPosition: "-30% 0%", duration: 1.25, ease: "power2.inOut" }, 0.3)
           .fromTo(one("[data-intro-full]"), { opacity: 0 }, { opacity: 1, duration: 0.7, ease: "power2.out" }, 1.1)
@@ -89,16 +127,26 @@ export function Landing() {
           .from(one("[data-nav]"), { opacity: 0, duration: 0.6, ease: "power2.out" }, 2.9)
           .from(one("[data-hint]"), { opacity: 0, duration: 0.6 }, 3.0);
 
-        const skip = () => tl.progress(1);
+        const skip = () => {
+          if (tl.progress() < 1) tl.progress(1);
+        };
+        skipRef.current = skip;
         const events = ["wheel", "touchstart", "pointerdown", "keydown"] as const;
         events.forEach((e) => window.addEventListener(e, skip, { passive: true }));
         removeSkip = () => events.forEach((e) => window.removeEventListener(e, skip));
-      } else {
-        // Repeat visit: minimal recognition, no gate.
-        gsap.from(one("[data-wm-intro]"), { opacity: 0, duration: 0.8, ease: "power2.out" });
-        gsap.from(one("[data-wm-img]"), { y: 10, duration: 0.9, ease: "expo.out" });
-        finishIntro();
-      }
+      };
+
+      buildIntro();
+
+      // bfcache restoration reuses the frozen DOM/JS heap (no remount), so replay
+      // explicitly. Non-persisted pageshow events are plain navigations; ignore them
+      // to avoid double timelines. Focus/visibility changes never replay.
+      const onPageShow = (e: PageTransitionEvent) => {
+        if (!e.persisted || disposed) return;
+        buildIntro();
+        ScrollTrigger.refresh();
+      };
+      window.addEventListener("pageshow", onPageShow);
 
       // ---------- Scroll: understanding -> continuity ----------
       ScrollTrigger.config({ ignoreMobileResize: true });
@@ -197,7 +245,15 @@ export function Landing() {
       });
 
       return () => {
+        disposed = true;
+        window.removeEventListener("pageshow", onPageShow);
         removeSkip();
+        introTl?.kill();
+        introTl = null;
+        skipRef.current = () => {};
+        try {
+          if (prevRestoration !== null) history.scrollRestoration = prevRestoration;
+        } catch {}
         mm.revert();
       };
     },
@@ -230,7 +286,7 @@ export function Landing() {
             <FoldedA className="h-auto w-full" />
           </div>
         </div>
-        <button type="button" className={`t-label lp-skip`}>
+        <button type="button" data-skip className={`t-label lp-skip`} onClick={() => skipRef.current?.()}>
           Skip intro
         </button>
       </div>
