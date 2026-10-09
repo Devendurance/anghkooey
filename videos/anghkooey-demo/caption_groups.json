@@ -1,0 +1,297 @@
+[
+  {
+    "start": 0.35,
+    "end": 2.342,
+    "text": "Here's the part of travel planning nobody"
+  },
+  {
+    "start": 2.347,
+    "end": 5.262,
+    "text": "likes: explaining yourself all over again."
+  },
+  {
+    "start": 5.377,
+    "end": 6.487,
+    "text": "The quiet room."
+  },
+  {
+    "start": 6.492,
+    "end": 7.6419999999999995,
+    "text": "The morning light."
+  },
+  {
+    "start": 7.85,
+    "end": 9.703,
+    "text": "The road noise that ruined your last"
+  },
+  {
+    "start": 9.708,
+    "end": 10.463000000000001,
+    "text": "stay."
+  },
+  {
+    "start": 10.578,
+    "end": 12.704,
+    "text": "Those small details matter."
+  },
+  {
+    "start": 17.35,
+    "end": 20.468000000000004,
+    "text": "So I built Anghkooey, an AI concierge"
+  },
+  {
+    "start": 20.473000000000003,
+    "end": 22.157000000000004,
+    "text": "whose name means remember."
+  },
+  {
+    "start": 22.563000000000002,
+    "end": 24.427000000000003,
+    "text": "With your permission, it keeps the small"
+  },
+  {
+    "start": 24.432000000000002,
+    "end": 26.854000000000003,
+    "text": "details behind your choices and brings them"
+  },
+  {
+    "start": 26.859,
+    "end": 28.241,
+    "text": "back when they're relevant."
+  },
+  {
+    "start": 28.565,
+    "end": 30.075000000000003,
+    "text": "Watch what changes."
+  },
+  {
+    "start": 38.35,
+    "end": 40.4,
+    "text": "Before linking, I ask about a traveller's"
+  },
+  {
+    "start": 40.405,
+    "end": 41.752,
+    "text": "hotel preferences."
+  },
+  {
+    "start": 42.077,
+    "end": 44.620000000000005,
+    "text": "Anghkooey won't guess from what's available here."
+  },
+  {
+    "start": 45.119,
+    "end": 47.261,
+    "text": "In Telegram, I enable memory and share"
+  },
+  {
+    "start": 47.266000000000005,
+    "end": 51.162,
+    "text": "what matters: quiet hotels, beautiful natural light,"
+  },
+  {
+    "start": 51.167,
+    "end": 53.421,
+    "text": "and no rooms facing busy roads."
+  },
+  {
+    "start": 53.687,
+    "end": 55.243,
+    "text": "The preference is acknowledged."
+  },
+  {
+    "start": 55.649,
+    "end": 57.779999999999994,
+    "text": "A separate Web save shows a confirmed"
+  },
+  {
+    "start": 57.785,
+    "end": 59.156000000000006,
+    "text": "Walrus receipt."
+  },
+  {
+    "start": 65.35,
+    "end": 67.39399999999999,
+    "text": "First, the connection is confirmed."
+  },
+  {
+    "start": 67.71799999999999,
+    "end": 70.122,
+    "text": "Now I ask about my saved preferences."
+  },
+  {
+    "start": 70.44699999999999,
+    "end": 72.497,
+    "text": "This time, Anghkooey doesn't make me repeat"
+  },
+  {
+    "start": 72.502,
+    "end": 73.42,
+    "text": "the story."
+  },
+  {
+    "start": 73.68599999999999,
+    "end": 76.485,
+    "text": "It recalls quiet hotels and natural lighting,"
+  },
+  {
+    "start": 76.693,
+    "end": 78.505,
+    "text": "two durable preferences."
+  },
+  {
+    "start": 78.829,
+    "end": 81.47699999999999,
+    "text": "The actual reply makes the change visible."
+  },
+  {
+    "start": 81.80099999999999,
+    "end": 83.805,
+    "text": "It also honestly flags what it can't"
+  },
+  {
+    "start": 83.81,
+    "end": 87.224,
+    "text": "confirm about where those preferences were shared."
+  },
+  {
+    "start": 91.35,
+    "end": 93.243,
+    "text": "People don't live in one tab."
+  },
+  {
+    "start": 93.568,
+    "end": 96.297,
+    "text": "Anghkooey works through Telegram and iMessage."
+  },
+  {
+    "start": 96.621,
+    "end": 99.15899999999999,
+    "text": "From Profile, I generate a one-time linking"
+  },
+  {
+    "start": 99.16399999999999,
+    "end": 101.916,
+    "text": "code and confirm through the messaging channel."
+  },
+  {
+    "start": 102.24,
+    "end": 105.735,
+    "text": "Existing accounts require an explicit merge confirmation."
+  },
+  {
+    "start": 106.06,
+    "end": 108.33,
+    "text": "Once linked, those preferences can follow me"
+  },
+  {
+    "start": 108.335,
+    "end": 110.02,
+    "text": "across conversations."
+  },
+  {
+    "start": 116.35,
+    "end": 118.649,
+    "text": "Memory also needs a way to change."
+  },
+  {
+    "start": 118.97399999999999,
+    "end": 120.966,
+    "text": "In the Memories library, I can review"
+  },
+  {
+    "start": 120.97099999999999,
+    "end": 124.042,
+    "text": "confirmed records, search for relevant facts, and"
+  },
+  {
+    "start": 124.047,
+    "end": 125.92899999999999,
+    "text": "correct an outdated preference."
+  },
+  {
+    "start": 126.42699999999999,
+    "end": 128.76199999999997,
+    "text": "A correction creates a new Walrus blob"
+  },
+  {
+    "start": 128.808,
+    "end": 131.101,
+    "text": "and retires the previous version from future"
+  },
+  {
+    "start": 131.106,
+    "end": 131.92,
+    "text": "recall."
+  },
+  {
+    "start": 132.244,
+    "end": 134.60199999999998,
+    "text": "Saving memory starts with permission."
+  },
+  {
+    "start": 139,
+    "end": 143.41199999999998,
+    "text": "Underneath: DeepSeek Flash, memory orchestration, Walrus,"
+  },
+  {
+    "start": 143.493,
+    "end": 145.88,
+    "text": "Neon for account state, and a persistent"
+  },
+  {
+    "start": 145.885,
+    "end": 147.511,
+    "text": "Photon messaging worker."
+  },
+  {
+    "start": 147.916,
+    "end": 151.969,
+    "text": "The engineering challenges were real: ESM-only SDK"
+  },
+  {
+    "start": 151.992,
+    "end": 156.178,
+    "text": "imports, missing peer packages, reasoning tokens consuming"
+  },
+  {
+    "start": 156.183,
+    "end": 158.91199999999998,
+    "text": "response budgets, and duplicate workers."
+  },
+  {
+    "start": 159.236,
+    "end": 161.88,
+    "text": "We addressed them and documented the lessons."
+  },
+  {
+    "start": 162.35,
+    "end": 163.72099999999998,
+    "text": "No fake bookings."
+  },
+  {
+    "start": 163.766,
+    "end": 165.706,
+    "text": "No memory claims without proof."
+  },
+  {
+    "start": 166.20499999999998,
+    "end": 168.336,
+    "text": "A concierge that remembers what matters and"
+  },
+  {
+    "start": 168.341,
+    "end": 169.47899999999998,
+    "text": "lets you correct it."
+  },
+  {
+    "start": 169.885,
+    "end": 170.92999999999998,
+    "text": "Anghkooey."
+  },
+  {
+    "start": 171.255,
+    "end": 173.682,
+    "text": "You shouldn't have to explain yourself twice."
+  }
+]

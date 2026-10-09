@@ -1,0 +1,73 @@
+[Script Info]
+Title: Anghkooey final audio-aligned captions
+ScriptType: v4.00+
+PlayResX: 1920
+PlayResY: 1080
+WrapStyle: 2
+ScaledBorderAndShadow: yes
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Default,Satoshi Film,46,&H00DFEEF4,&H00DFEEF4,&H000F0805,&H000F0805,0,0,0,0,100,100,0,0,3,12,0,2,125,125,54,1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+Dialogue: 0,0:00:00.35,0:00:02.34,Default,,0,0,0,,Here's the part of travel planning nobody
+Dialogue: 0,0:00:02.35,0:00:05.26,Default,,0,0,0,,likes: explaining yourself all over again.
+Dialogue: 0,0:00:05.38,0:00:06.49,Default,,0,0,0,,The quiet room.
+Dialogue: 0,0:00:06.49,0:00:07.64,Default,,0,0,0,,The morning light.
+Dialogue: 0,0:00:07.85,0:00:09.70,Default,,0,0,0,,The road noise that ruined your last
+Dialogue: 0,0:00:09.71,0:00:10.46,Default,,0,0,0,,stay.
+Dialogue: 0,0:00:10.58,0:00:12.70,Default,,0,0,0,,Those small details matter.
+Dialogue: 0,0:00:17.35,0:00:20.47,Default,,0,0,0,,So I built Anghkooey, an AI concierge
+Dialogue: 0,0:00:20.47,0:00:22.16,Default,,0,0,0,,whose name means remember.
+Dialogue: 0,0:00:22.56,0:00:24.43,Default,,0,0,0,,With your permission, it keeps the small
+Dialogue: 0,0:00:24.43,0:00:26.85,Default,,0,0,0,,details behind your choices and brings them
+Dialogue: 0,0:00:26.86,0:00:28.24,Default,,0,0,0,,back when they're relevant.
+Dialogue: 0,0:00:28.57,0:00:30.08,Default,,0,0,0,,Watch what changes.
+Dialogue: 0,0:00:38.35,0:00:40.40,Default,,0,0,0,,Before linking, I ask about a traveller's
+Dialogue: 0,0:00:40.41,0:00:41.75,Default,,0,0,0,,hotel preferences.
+Dialogue: 0,0:00:42.08,0:00:44.62,Default,,0,0,0,,Anghkooey won't guess from what's available here.
+Dialogue: 0,0:00:45.12,0:00:47.26,Default,,0,0,0,,In Telegram, I enable memory and share
+Dialogue: 0,0:00:47.27,0:00:51.16,Default,,0,0,0,,what matters: quiet hotels, beautiful natural light,
+Dialogue: 0,0:00:51.17,0:00:53.42,Default,,0,0,0,,and no rooms facing busy roads.
+Dialogue: 0,0:00:53.69,0:00:55.24,Default,,0,0,0,,The preference is acknowledged.
+Dialogue: 0,0:00:55.65,0:00:57.78,Default,,0,0,0,,A separate Web save shows a confirmed
+Dialogue: 0,0:00:57.79,0:00:59.16,Default,,0,0,0,,Walrus receipt.
+Dialogue: 0,0:01:05.35,0:01:07.39,Default,,0,0,0,,First, the connection is confirmed.
+Dialogue: 0,0:01:07.72,0:01:10.12,Default,,0,0,0,,Now I ask about my saved preferences.
+Dialogue: 0,0:01:10.45,0:01:12.50,Default,,0,0,0,,This time, Anghkooey doesn't make me repeat
+Dialogue: 0,0:01:12.50,0:01:13.42,Default,,0,0,0,,the story.
+Dialogue: 0,0:01:13.69,0:01:16.49,Default,,0,0,0,,It recalls quiet hotels and natural lighting,
+Dialogue: 0,0:01:16.69,0:01:18.51,Default,,0,0,0,,two durable preferences.
+Dialogue: 0,0:01:18.83,0:01:21.48,Default,,0,0,0,,The actual reply makes the change visible.
+Dialogue: 0,0:01:21.80,0:01:23.81,Default,,0,0,0,,It also honestly flags what it can't
+Dialogue: 0,0:01:23.81,0:01:27.22,Default,,0,0,0,,confirm about where those preferences were shared.
+Dialogue: 0,0:01:31.35,0:01:33.24,Default,,0,0,0,,People don't live in one tab.
+Dialogue: 0,0:01:33.57,0:01:36.30,Default,,0,0,0,,Anghkooey works through Telegram and iMessage.
+Dialogue: 0,0:01:36.62,0:01:39.16,Default,,0,0,0,,From Profile, I generate a one-time linking
+Dialogue: 0,0:01:39.16,0:01:41.92,Default,,0,0,0,,code and confirm through the messaging channel.
+Dialogue: 0,0:01:42.24,0:01:45.74,Default,,0,0,0,,Existing accounts require an explicit merge confirmation.
+Dialogue: 0,0:01:46.06,0:01:48.33,Default,,0,0,0,,Once linked, those preferences can follow me
+Dialogue: 0,0:01:48.34,0:01:50.02,Default,,0,0,0,,across conversations.
+Dialogue: 0,0:01:56.35,0:01:58.65,Default,,0,0,0,,Memory also needs a way to change.
+Dialogue: 0,0:01:58.97,0:02:00.97,Default,,0,0,0,,In the Memories library, I can review
+Dialogue: 0,0:02:00.97,0:02:04.04,Default,,0,0,0,,confirmed records, search for relevant facts, and
+Dialogue: 0,0:02:04.05,0:02:05.93,Default,,0,0,0,,correct an outdated preference.
+Dialogue: 0,0:02:06.43,0:02:08.76,Default,,0,0,0,,A correction creates a new Walrus blob
+Dialogue: 0,0:02:08.81,0:02:11.10,Default,,0,0,0,,and retires the previous version from future
+Dialogue: 0,0:02:11.11,0:02:11.92,Default,,0,0,0,,recall.
+Dialogue: 0,0:02:12.24,0:02:14.60,Default,,0,0,0,,Saving memory starts with permission.
+Dialogue: 0,0:02:19.00,0:02:23.41,Default,,0,0,0,,Underneath: DeepSeek Flash, memory orchestration, Walrus,
+Dialogue: 0,0:02:23.49,0:02:25.88,Default,,0,0,0,,Neon for account state, and a persistent
+Dialogue: 0,0:02:25.89,0:02:27.51,Default,,0,0,0,,Photon messaging worker.
+Dialogue: 0,0:02:27.92,0:02:31.97,Default,,0,0,0,,The engineering challenges were real: ESM-only SDK
+Dialogue: 0,0:02:31.99,0:02:36.18,Default,,0,0,0,,imports, missing peer packages, reasoning tokens consuming
+Dialogue: 0,0:02:36.18,0:02:38.91,Default,,0,0,0,,response budgets, and duplicate workers.
+Dialogue: 0,0:02:39.24,0:02:41.88,Default,,0,0,0,,We addressed them and documented the lessons.
+Dialogue: 0,0:02:42.35,0:02:43.72,Default,,0,0,0,,No fake bookings.
+Dialogue: 0,0:02:43.77,0:02:45.71,Default,,0,0,0,,No memory claims without proof.
+Dialogue: 0,0:02:46.21,0:02:48.34,Default,,0,0,0,,A concierge that remembers what matters and
+Dialogue: 0,0:02:48.34,0:02:49.48,Default,,0,0,0,,lets you correct it.
+Dialogue: 0,0:02:49.89,0:02:50.93,Default,,0,0,0,,Anghkooey.
+Dialogue: 0,0:02:51.26,0:02:53.68,Default,,0,0,0,,You shouldn't have to explain yourself twice.

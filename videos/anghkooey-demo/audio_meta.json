@@ -1,0 +1,2015 @@
+{
+  "provider": "ElevenLabs",
+  "voice": "George - Warm, Captivating Storyteller",
+  "voice_id": "JBFqnCBsd6RMkjVDRZzb",
+  "chapters": [
+    {
+      "id": "01",
+      "title": "The frustration",
+      "start": 0,
+      "duration": 17,
+      "text": "Here's the part of travel planning nobody likes: explaining yourself all over again. The quiet room. The morning light. The road noise that ruined your last stay. Those small details matter.",
+      "path": "audio/01-voice.mp3",
+      "voice_duration": 12.213696,
+      "offset": 0.35,
+      "words": [
+        {
+          "word": "Here's",
+          "start": 0,
+          "end": 0.313
+        },
+        {
+          "word": "the",
+          "start": 0.36,
+          "end": 0.43
+        },
+        {
+          "word": "part",
+          "start": 0.476,
+          "end": 0.72
+        },
+        {
+          "word": "of",
+          "start": 0.766,
+          "end": 0.824
+        },
+        {
+          "word": "travel",
+          "start": 0.882,
+          "end": 1.184
+        },
+        {
+          "word": "planning",
+          "start": 1.242,
+          "end": 1.567
+        },
+        {
+          "word": "nobody",
+          "start": 1.637,
+          "end": 1.939
+        },
+        {
+          "word": "likes:",
+          "start": 1.997,
+          "end": 2.508
+        },
+        {
+          "word": "explaining",
+          "start": 2.728,
+          "end": 3.297
+        },
+        {
+          "word": "yourself",
+          "start": 3.344,
+          "end": 3.738
+        },
+        {
+          "word": "all",
+          "start": 3.796,
+          "end": 3.994
+        },
+        {
+          "word": "over",
+          "start": 4.063,
+          "end": 4.261
+        },
+        {
+          "word": "again.",
+          "start": 4.319,
+          "end": 4.772
+        },
+        {
+          "word": "The",
+          "start": 5.027,
+          "end": 5.143
+        },
+        {
+          "word": "quiet",
+          "start": 5.201,
+          "end": 5.526
+        },
+        {
+          "word": "room.",
+          "start": 5.573,
+          "end": 6.014
+        },
+        {
+          "word": "The",
+          "start": 6.142,
+          "end": 6.258
+        },
+        {
+          "word": "morning",
+          "start": 6.316,
+          "end": 6.618
+        },
+        {
+          "word": "light.",
+          "start": 6.687,
+          "end": 7.152
+        },
+        {
+          "word": "The",
+          "start": 7.5,
+          "end": 7.616
+        },
+        {
+          "word": "road",
+          "start": 7.686,
+          "end": 7.906
+        },
+        {
+          "word": "noise",
+          "start": 7.976,
+          "end": 8.231
+        },
+        {
+          "word": "that",
+          "start": 8.266,
+          "end": 8.394
+        },
+        {
+          "word": "ruined",
+          "start": 8.452,
+          "end": 8.766
+        },
+        {
+          "word": "your",
+          "start": 8.8,
+          "end": 8.916
+        },
+        {
+          "word": "last",
+          "start": 8.975,
+          "end": 9.276
+        },
+        {
+          "word": "stay.",
+          "start": 9.358,
+          "end": 9.973
+        },
+        {
+          "word": "Those",
+          "start": 10.228,
+          "end": 10.472
+        },
+        {
+          "word": "small",
+          "start": 10.507,
+          "end": 10.774
+        },
+        {
+          "word": "details",
+          "start": 10.844,
+          "end": 11.355
+        },
+        {
+          "word": "matter.",
+          "start": 11.424,
+          "end": 12.214
+        }
+      ],
+      "captions": [
+        {
+          "start": 0.35,
+          "end": 2.342,
+          "text": "Here's the part of travel planning nobody"
+        },
+        {
+          "start": 2.347,
+          "end": 5.262,
+          "text": "likes: explaining yourself all over again."
+        },
+        {
+          "start": 5.377,
+          "end": 6.487,
+          "text": "The quiet room."
+        },
+        {
+          "start": 6.492,
+          "end": 7.6419999999999995,
+          "text": "The morning light."
+        },
+        {
+          "start": 7.85,
+          "end": 9.703,
+          "text": "The road noise that ruined your last"
+        },
+        {
+          "start": 9.708,
+          "end": 10.463000000000001,
+          "text": "stay."
+        },
+        {
+          "start": 10.578,
+          "end": 12.704,
+          "text": "Those small details matter."
+        }
+      ]
+    },
+    {
+      "id": "02",
+      "title": "Meet Anghkooey",
+      "start": 17,
+      "duration": 21,
+      "text": "So I built Anghkooey, an AI concierge whose name means remember. With your permission, it keeps the small details behind your choices and brings them back when they're relevant. Watch what changes.",
+      "path": "audio/02-voice.mp3",
+      "voice_duration": 12.585215,
+      "offset": 17.35,
+      "words": [
+        {
+          "word": "So",
+          "start": 0,
+          "end": 0.163
+        },
+        {
+          "word": "I",
+          "start": 0.244,
+          "end": 0.267
+        },
+        {
+          "word": "built",
+          "start": 0.395,
+          "end": 0.65
+        },
+        {
+          "word": "Anghkooey,",
+          "start": 0.755,
+          "end": 1.509
+        },
+        {
+          "word": "an",
+          "start": 1.695,
+          "end": 1.834
+        },
+        {
+          "word": "AI",
+          "start": 1.904,
+          "end": 2.218
+        },
+        {
+          "word": "concierge",
+          "start": 2.287,
+          "end": 3.077
+        },
+        {
+          "word": "whose",
+          "start": 3.123,
+          "end": 3.379
+        },
+        {
+          "word": "name",
+          "start": 3.425,
+          "end": 3.634
+        },
+        {
+          "word": "means",
+          "start": 3.669,
+          "end": 3.913
+        },
+        {
+          "word": "remember.",
+          "start": 3.982,
+          "end": 4.667
+        },
+        {
+          "word": "With",
+          "start": 5.213,
+          "end": 5.387
+        },
+        {
+          "word": "your",
+          "start": 5.433,
+          "end": 5.561
+        },
+        {
+          "word": "permission,",
+          "start": 5.619,
+          "end": 6.118
+        },
+        {
+          "word": "it",
+          "start": 6.165,
+          "end": 6.293
+        },
+        {
+          "word": "keeps",
+          "start": 6.339,
+          "end": 6.571
+        },
+        {
+          "word": "the",
+          "start": 6.618,
+          "end": 6.687
+        },
+        {
+          "word": "small",
+          "start": 6.745,
+          "end": 7.024
+        },
+        {
+          "word": "details",
+          "start": 7.082,
+          "end": 7.558
+        },
+        {
+          "word": "behind",
+          "start": 7.616,
+          "end": 7.941
+        },
+        {
+          "word": "your",
+          "start": 7.999,
+          "end": 8.115
+        },
+        {
+          "word": "choices",
+          "start": 8.173,
+          "end": 8.626
+        },
+        {
+          "word": "and",
+          "start": 8.812,
+          "end": 8.998
+        },
+        {
+          "word": "brings",
+          "start": 9.044,
+          "end": 9.288
+        },
+        {
+          "word": "them",
+          "start": 9.334,
+          "end": 9.462
+        },
+        {
+          "word": "back",
+          "start": 9.509,
+          "end": 9.718
+        },
+        {
+          "word": "when",
+          "start": 9.764,
+          "end": 9.892
+        },
+        {
+          "word": "they're",
+          "start": 9.915,
+          "end": 10.112
+        },
+        {
+          "word": "relevant.",
+          "start": 10.136,
+          "end": 10.751
+        },
+        {
+          "word": "Watch",
+          "start": 11.215,
+          "end": 11.482
+        },
+        {
+          "word": "what",
+          "start": 11.529,
+          "end": 11.656
+        },
+        {
+          "word": "changes.",
+          "start": 11.703,
+          "end": 12.585
+        }
+      ],
+      "captions": [
+        {
+          "start": 17.35,
+          "end": 20.468000000000004,
+          "text": "So I built Anghkooey, an AI concierge"
+        },
+        {
+          "start": 20.473000000000003,
+          "end": 22.157000000000004,
+          "text": "whose name means remember."
+        },
+        {
+          "start": 22.563000000000002,
+          "end": 24.427000000000003,
+          "text": "With your permission, it keeps the small"
+        },
+        {
+          "start": 24.432000000000002,
+          "end": 26.854000000000003,
+          "text": "details behind your choices and brings them"
+        },
+        {
+          "start": 26.859,
+          "end": 28.241,
+          "text": "back when they're relevant."
+        },
+        {
+          "start": 28.565,
+          "end": 30.075000000000003,
+          "text": "Watch what changes."
+        }
+      ]
+    },
+    {
+      "id": "03",
+      "title": "Before memory",
+      "start": 38,
+      "duration": 27,
+      "text": "Before linking, I ask about a traveller's hotel preferences. Anghkooey won't guess from what's available here. In Telegram, I enable memory and share what matters: quiet hotels, beautiful natural light, and no rooms facing busy roads. The preference is acknowledged. A separate Web save shows a confirmed Walrus receipt.",
+      "path": "audio/03-voice.mp3",
+      "voice_duration": 20.66576,
+      "offset": 38.35,
+      "words": [
+        {
+          "word": "Before",
+          "start": 0,
+          "end": 0.348
+        },
+        {
+          "word": "linking,",
+          "start": 0.395,
+          "end": 0.813
+        },
+        {
+          "word": "I",
+          "start": 0.859,
+          "end": 0.917
+        },
+        {
+          "word": "ask",
+          "start": 1.022,
+          "end": 1.219
+        },
+        {
+          "word": "about",
+          "start": 1.265,
+          "end": 1.474
+        },
+        {
+          "word": "a",
+          "start": 1.509,
+          "end": 1.544
+        },
+        {
+          "word": "traveller's",
+          "start": 1.591,
+          "end": 1.997
+        },
+        {
+          "word": "hotel",
+          "start": 2.055,
+          "end": 2.38
+        },
+        {
+          "word": "preferences.",
+          "start": 2.45,
+          "end": 3.262
+        },
+        {
+          "word": "Anghkooey",
+          "start": 3.727,
+          "end": 4.191
+        },
+        {
+          "word": "won't",
+          "start": 4.261,
+          "end": 4.458
+        },
+        {
+          "word": "guess",
+          "start": 4.505,
+          "end": 4.772
+        },
+        {
+          "word": "from",
+          "start": 4.807,
+          "end": 4.934
+        },
+        {
+          "word": "what's",
+          "start": 4.969,
+          "end": 5.155
+        },
+        {
+          "word": "available",
+          "start": 5.19,
+          "end": 5.642
+        },
+        {
+          "word": "here.",
+          "start": 5.689,
+          "end": 6.13
+        },
+        {
+          "word": "In",
+          "start": 6.769,
+          "end": 6.908
+        },
+        {
+          "word": "Telegram,",
+          "start": 6.966,
+          "end": 7.512
+        },
+        {
+          "word": "I",
+          "start": 7.558,
+          "end": 7.616
+        },
+        {
+          "word": "enable",
+          "start": 7.721,
+          "end": 8.057
+        },
+        {
+          "word": "memory",
+          "start": 8.104,
+          "end": 8.429
+        },
+        {
+          "word": "and",
+          "start": 8.487,
+          "end": 8.591
+        },
+        {
+          "word": "share",
+          "start": 8.649,
+          "end": 8.882
+        },
+        {
+          "word": "what",
+          "start": 8.916,
+          "end": 9.056
+        },
+        {
+          "word": "matters:",
+          "start": 9.114,
+          "end": 9.764
+        },
+        {
+          "word": "quiet",
+          "start": 10.17,
+          "end": 10.519
+        },
+        {
+          "word": "hotels,",
+          "start": 10.577,
+          "end": 11.273
+        },
+        {
+          "word": "beautiful",
+          "start": 11.401,
+          "end": 11.807
+        },
+        {
+          "word": "natural",
+          "start": 11.877,
+          "end": 12.225
+        },
+        {
+          "word": "light,",
+          "start": 12.295,
+          "end": 12.69
+        },
+        {
+          "word": "and",
+          "start": 12.817,
+          "end": 12.968
+        },
+        {
+          "word": "no",
+          "start": 13.038,
+          "end": 13.166
+        },
+        {
+          "word": "rooms",
+          "start": 13.247,
+          "end": 13.56
+        },
+        {
+          "word": "facing",
+          "start": 13.618,
+          "end": 13.944
+        },
+        {
+          "word": "busy",
+          "start": 14.002,
+          "end": 14.234
+        },
+        {
+          "word": "roads.",
+          "start": 14.304,
+          "end": 14.931
+        },
+        {
+          "word": "The",
+          "start": 15.337,
+          "end": 15.453
+        },
+        {
+          "word": "preference",
+          "start": 15.5,
+          "end": 15.894
+        },
+        {
+          "word": "is",
+          "start": 15.917,
+          "end": 15.999
+        },
+        {
+          "word": "acknowledged.",
+          "start": 16.034,
+          "end": 16.753
+        },
+        {
+          "word": "A",
+          "start": 17.299,
+          "end": 17.369
+        },
+        {
+          "word": "separate",
+          "start": 17.473,
+          "end": 17.845
+        },
+        {
+          "word": "Web",
+          "start": 17.88,
+          "end": 18.077
+        },
+        {
+          "word": "save",
+          "start": 18.147,
+          "end": 18.46
+        },
+        {
+          "word": "shows",
+          "start": 18.495,
+          "end": 18.739
+        },
+        {
+          "word": "a",
+          "start": 18.774,
+          "end": 18.808
+        },
+        {
+          "word": "confirmed",
+          "start": 18.855,
+          "end": 19.377
+        },
+        {
+          "word": "Walrus",
+          "start": 19.435,
+          "end": 19.83
+        },
+        {
+          "word": "receipt.",
+          "start": 19.888,
+          "end": 20.666
+        }
+      ],
+      "captions": [
+        {
+          "start": 38.35,
+          "end": 40.4,
+          "text": "Before linking, I ask about a traveller's"
+        },
+        {
+          "start": 40.405,
+          "end": 41.752,
+          "text": "hotel preferences."
+        },
+        {
+          "start": 42.077,
+          "end": 44.620000000000005,
+          "text": "Anghkooey won't guess from what's available here."
+        },
+        {
+          "start": 45.119,
+          "end": 47.261,
+          "text": "In Telegram, I enable memory and share"
+        },
+        {
+          "start": 47.266000000000005,
+          "end": 51.162,
+          "text": "what matters: quiet hotels, beautiful natural light,"
+        },
+        {
+          "start": 51.167,
+          "end": 53.421,
+          "text": "and no rooms facing busy roads."
+        },
+        {
+          "start": 53.687,
+          "end": 55.243,
+          "text": "The preference is acknowledged."
+        },
+        {
+          "start": 55.649,
+          "end": 57.779999999999994,
+          "text": "A separate Web save shows a confirmed"
+        },
+        {
+          "start": 57.785,
+          "end": 59.156000000000006,
+          "text": "Walrus receipt."
+        }
+      ]
+    },
+    {
+      "id": "04",
+      "title": "The moment it remembers",
+      "start": 65,
+      "duration": 26,
+      "text": "First, the connection is confirmed. Now I ask about my saved preferences. This time, Anghkooey doesn't make me repeat the story. It recalls quiet hotels and natural lighting, two durable preferences. The actual reply makes the change visible. It also honestly flags what it can't confirm about where those preferences were shared.",
+      "path": "audio/04-voice.mp3",
+      "voice_duration": 21.733878,
+      "offset": 65.35,
+      "words": [
+        {
+          "word": "First,",
+          "start": 0,
+          "end": 0.43
+        },
+        {
+          "word": "the",
+          "start": 0.464,
+          "end": 0.557
+        },
+        {
+          "word": "connection",
+          "start": 0.604,
+          "end": 0.975
+        },
+        {
+          "word": "is",
+          "start": 1.022,
+          "end": 1.091
+        },
+        {
+          "word": "confirmed.",
+          "start": 1.138,
+          "end": 1.904
+        },
+        {
+          "word": "Now",
+          "start": 2.368,
+          "end": 2.566
+        },
+        {
+          "word": "I",
+          "start": 2.647,
+          "end": 2.67
+        },
+        {
+          "word": "ask",
+          "start": 2.775,
+          "end": 2.972
+        },
+        {
+          "word": "about",
+          "start": 3.019,
+          "end": 3.204
+        },
+        {
+          "word": "my",
+          "start": 3.251,
+          "end": 3.332
+        },
+        {
+          "word": "saved",
+          "start": 3.413,
+          "end": 3.738
+        },
+        {
+          "word": "preferences.",
+          "start": 3.785,
+          "end": 4.632
+        },
+        {
+          "word": "This",
+          "start": 5.097,
+          "end": 5.294
+        },
+        {
+          "word": "time,",
+          "start": 5.352,
+          "end": 5.677
+        },
+        {
+          "word": "Anghkooey",
+          "start": 5.724,
+          "end": 6.142
+        },
+        {
+          "word": "doesn't",
+          "start": 6.2,
+          "end": 6.444
+        },
+        {
+          "word": "make",
+          "start": 6.478,
+          "end": 6.629
+        },
+        {
+          "word": "me",
+          "start": 6.664,
+          "end": 6.734
+        },
+        {
+          "word": "repeat",
+          "start": 6.803,
+          "end": 7.105
+        },
+        {
+          "word": "the",
+          "start": 7.152,
+          "end": 7.221
+        },
+        {
+          "word": "story.",
+          "start": 7.268,
+          "end": 7.93
+        },
+        {
+          "word": "It",
+          "start": 8.336,
+          "end": 8.452
+        },
+        {
+          "word": "recalls",
+          "start": 8.499,
+          "end": 8.893
+        },
+        {
+          "word": "quiet",
+          "start": 8.951,
+          "end": 9.265
+        },
+        {
+          "word": "hotels",
+          "start": 9.323,
+          "end": 9.787
+        },
+        {
+          "word": "and",
+          "start": 9.834,
+          "end": 9.915
+        },
+        {
+          "word": "natural",
+          "start": 9.973,
+          "end": 10.333
+        },
+        {
+          "word": "lighting,",
+          "start": 10.391,
+          "end": 10.995
+        },
+        {
+          "word": "two",
+          "start": 11.343,
+          "end": 11.552
+        },
+        {
+          "word": "durable",
+          "start": 11.633,
+          "end": 12.121
+        },
+        {
+          "word": "preferences.",
+          "start": 12.156,
+          "end": 13.015
+        },
+        {
+          "word": "The",
+          "start": 13.479,
+          "end": 13.607
+        },
+        {
+          "word": "actual",
+          "start": 13.677,
+          "end": 14.002
+        },
+        {
+          "word": "reply",
+          "start": 14.071,
+          "end": 14.478
+        },
+        {
+          "word": "makes",
+          "start": 14.582,
+          "end": 14.791
+        },
+        {
+          "word": "the",
+          "start": 14.838,
+          "end": 14.907
+        },
+        {
+          "word": "change",
+          "start": 14.953,
+          "end": 15.279
+        },
+        {
+          "word": "visible.",
+          "start": 15.313,
+          "end": 15.987
+        },
+        {
+          "word": "It",
+          "start": 16.451,
+          "end": 16.59
+        },
+        {
+          "word": "also",
+          "start": 16.637,
+          "end": 16.916
+        },
+        {
+          "word": "honestly",
+          "start": 16.985,
+          "end": 17.392
+        },
+        {
+          "word": "flags",
+          "start": 17.461,
+          "end": 17.856
+        },
+        {
+          "word": "what",
+          "start": 17.891,
+          "end": 18.03
+        },
+        {
+          "word": "it",
+          "start": 18.065,
+          "end": 18.135
+        },
+        {
+          "word": "can't",
+          "start": 18.181,
+          "end": 18.413
+        },
+        {
+          "word": "confirm",
+          "start": 18.46,
+          "end": 19.063
+        },
+        {
+          "word": "about",
+          "start": 19.365,
+          "end": 19.667
+        },
+        {
+          "word": "where",
+          "start": 19.714,
+          "end": 19.946
+        },
+        {
+          "word": "those",
+          "start": 19.992,
+          "end": 20.178
+        },
+        {
+          "word": "preferences",
+          "start": 20.224,
+          "end": 20.758
+        },
+        {
+          "word": "were",
+          "start": 20.805,
+          "end": 20.944
+        },
+        {
+          "word": "shared.",
+          "start": 20.967,
+          "end": 21.734
+        }
+      ],
+      "captions": [
+        {
+          "start": 65.35,
+          "end": 67.39399999999999,
+          "text": "First, the connection is confirmed."
+        },
+        {
+          "start": 67.71799999999999,
+          "end": 70.122,
+          "text": "Now I ask about my saved preferences."
+        },
+        {
+          "start": 70.44699999999999,
+          "end": 72.497,
+          "text": "This time, Anghkooey doesn't make me repeat"
+        },
+        {
+          "start": 72.502,
+          "end": 73.42,
+          "text": "the story."
+        },
+        {
+          "start": 73.68599999999999,
+          "end": 76.485,
+          "text": "It recalls quiet hotels and natural lighting,"
+        },
+        {
+          "start": 76.693,
+          "end": 78.505,
+          "text": "two durable preferences."
+        },
+        {
+          "start": 78.829,
+          "end": 81.47699999999999,
+          "text": "The actual reply makes the change visible."
+        },
+        {
+          "start": 81.80099999999999,
+          "end": 83.805,
+          "text": "It also honestly flags what it can't"
+        },
+        {
+          "start": 83.81,
+          "end": 87.224,
+          "text": "confirm about where those preferences were shared."
+        }
+      ]
+    },
+    {
+      "id": "05",
+      "title": "Memory follows you",
+      "start": 91,
+      "duration": 25,
+      "text": "People don't live in one tab. Anghkooey works through Telegram and iMessage. From Profile, I generate a one-time linking code and confirm through the messaging channel. Existing accounts require an explicit merge confirmation. Once linked, those preferences can follow me across conversations.",
+      "path": "audio/05-voice.mp3",
+      "voice_duration": 18.529524,
+      "offset": 91.35,
+      "words": [
+        {
+          "word": "People",
+          "start": 0,
+          "end": 0.36
+        },
+        {
+          "word": "don't",
+          "start": 0.395,
+          "end": 0.58
+        },
+        {
+          "word": "live",
+          "start": 0.627,
+          "end": 0.789
+        },
+        {
+          "word": "in",
+          "start": 0.824,
+          "end": 0.882
+        },
+        {
+          "word": "one",
+          "start": 0.964,
+          "end": 1.149
+        },
+        {
+          "word": "tab.",
+          "start": 1.196,
+          "end": 1.753
+        },
+        {
+          "word": "Anghkooey",
+          "start": 2.218,
+          "end": 2.682
+        },
+        {
+          "word": "works",
+          "start": 2.752,
+          "end": 3.042
+        },
+        {
+          "word": "through",
+          "start": 3.065,
+          "end": 3.286
+        },
+        {
+          "word": "Telegram",
+          "start": 3.32,
+          "end": 3.796
+        },
+        {
+          "word": "and",
+          "start": 3.855,
+          "end": 3.959
+        },
+        {
+          "word": "iMessage.",
+          "start": 4.04,
+          "end": 4.807
+        },
+        {
+          "word": "From",
+          "start": 5.271,
+          "end": 5.445
+        },
+        {
+          "word": "Profile,",
+          "start": 5.503,
+          "end": 6.118
+        },
+        {
+          "word": "I",
+          "start": 6.153,
+          "end": 6.211
+        },
+        {
+          "word": "generate",
+          "start": 6.339,
+          "end": 6.745
+        },
+        {
+          "word": "a",
+          "start": 6.769,
+          "end": 6.803
+        },
+        {
+          "word": "one-time",
+          "start": 6.885,
+          "end": 7.372
+        },
+        {
+          "word": "linking",
+          "start": 7.43,
+          "end": 7.744
+        },
+        {
+          "word": "code",
+          "start": 7.814,
+          "end": 8.243
+        },
+        {
+          "word": "and",
+          "start": 8.301,
+          "end": 8.487
+        },
+        {
+          "word": "confirm",
+          "start": 8.557,
+          "end": 9.009
+        },
+        {
+          "word": "through",
+          "start": 9.067,
+          "end": 9.276
+        },
+        {
+          "word": "the",
+          "start": 9.3,
+          "end": 9.369
+        },
+        {
+          "word": "messaging",
+          "start": 9.404,
+          "end": 9.81
+        },
+        {
+          "word": "channel.",
+          "start": 9.868,
+          "end": 10.426
+        },
+        {
+          "word": "Existing",
+          "start": 10.89,
+          "end": 11.436
+        },
+        {
+          "word": "accounts",
+          "start": 11.494,
+          "end": 11.889
+        },
+        {
+          "word": "require",
+          "start": 11.958,
+          "end": 12.365
+        },
+        {
+          "word": "an",
+          "start": 12.399,
+          "end": 12.457
+        },
+        {
+          "word": "explicit",
+          "start": 12.504,
+          "end": 12.98
+        },
+        {
+          "word": "merge",
+          "start": 13.05,
+          "end": 13.363
+        },
+        {
+          "word": "confirmation.",
+          "start": 13.398,
+          "end": 14.245
+        },
+        {
+          "word": "Once",
+          "start": 14.71,
+          "end": 14.988
+        },
+        {
+          "word": "linked,",
+          "start": 15.047,
+          "end": 15.418
+        },
+        {
+          "word": "those",
+          "start": 15.488,
+          "end": 15.743
+        },
+        {
+          "word": "preferences",
+          "start": 15.79,
+          "end": 16.324
+        },
+        {
+          "word": "can",
+          "start": 16.37,
+          "end": 16.486
+        },
+        {
+          "word": "follow",
+          "start": 16.556,
+          "end": 16.788
+        },
+        {
+          "word": "me",
+          "start": 16.846,
+          "end": 16.927
+        },
+        {
+          "word": "across",
+          "start": 16.985,
+          "end": 17.264
+        },
+        {
+          "word": "conversations.",
+          "start": 17.322,
+          "end": 18.53
+        }
+      ],
+      "captions": [
+        {
+          "start": 91.35,
+          "end": 93.243,
+          "text": "People don't live in one tab."
+        },
+        {
+          "start": 93.568,
+          "end": 96.297,
+          "text": "Anghkooey works through Telegram and iMessage."
+        },
+        {
+          "start": 96.621,
+          "end": 99.15899999999999,
+          "text": "From Profile, I generate a one-time linking"
+        },
+        {
+          "start": 99.16399999999999,
+          "end": 101.916,
+          "text": "code and confirm through the messaging channel."
+        },
+        {
+          "start": 102.24,
+          "end": 105.735,
+          "text": "Existing accounts require an explicit merge confirmation."
+        },
+        {
+          "start": 106.06,
+          "end": 108.33,
+          "text": "Once linked, those preferences can follow me"
+        },
+        {
+          "start": 108.335,
+          "end": 110.02,
+          "text": "across conversations."
+        }
+      ]
+    },
+    {
+      "id": "06",
+      "title": "Remember, responsibly",
+      "start": 116,
+      "duration": 23,
+      "text": "Memory also needs a way to change. In the Memories library, I can review confirmed records, search for relevant facts, and correct an outdated preference. A correction creates a new Walrus blob and retires the previous version from future recall. Saving memory starts with permission.",
+      "path": "audio/06-voice.mp3",
+      "voice_duration": 18.111565,
+      "offset": 116.35,
+      "words": [
+        {
+          "word": "Memory",
+          "start": 0,
+          "end": 0.418
+        },
+        {
+          "word": "also",
+          "start": 0.476,
+          "end": 0.778
+        },
+        {
+          "word": "needs",
+          "start": 0.848,
+          "end": 1.057
+        },
+        {
+          "word": "a",
+          "start": 1.091,
+          "end": 1.115
+        },
+        {
+          "word": "way",
+          "start": 1.161,
+          "end": 1.312
+        },
+        {
+          "word": "to",
+          "start": 1.358,
+          "end": 1.416
+        },
+        {
+          "word": "change.",
+          "start": 1.486,
+          "end": 2.159
+        },
+        {
+          "word": "In",
+          "start": 2.624,
+          "end": 2.752
+        },
+        {
+          "word": "the",
+          "start": 2.786,
+          "end": 2.856
+        },
+        {
+          "word": "Memories",
+          "start": 2.902,
+          "end": 3.239
+        },
+        {
+          "word": "library,",
+          "start": 3.297,
+          "end": 3.878
+        },
+        {
+          "word": "I",
+          "start": 3.959,
+          "end": 4.017
+        },
+        {
+          "word": "can",
+          "start": 4.098,
+          "end": 4.214
+        },
+        {
+          "word": "review",
+          "start": 4.272,
+          "end": 4.563
+        },
+        {
+          "word": "confirmed",
+          "start": 4.621,
+          "end": 5.097
+        },
+        {
+          "word": "records,",
+          "start": 5.166,
+          "end": 5.712
+        },
+        {
+          "word": "search",
+          "start": 5.875,
+          "end": 6.177
+        },
+        {
+          "word": "for",
+          "start": 6.223,
+          "end": 6.327
+        },
+        {
+          "word": "relevant",
+          "start": 6.374,
+          "end": 6.745
+        },
+        {
+          "word": "facts,",
+          "start": 6.803,
+          "end": 7.361
+        },
+        {
+          "word": "and",
+          "start": 7.488,
+          "end": 7.628
+        },
+        {
+          "word": "correct",
+          "start": 7.697,
+          "end": 8.022
+        },
+        {
+          "word": "an",
+          "start": 8.069,
+          "end": 8.139
+        },
+        {
+          "word": "outdated",
+          "start": 8.185,
+          "end": 8.661
+        },
+        {
+          "word": "preference.",
+          "start": 8.719,
+          "end": 9.439
+        },
+        {
+          "word": "A",
+          "start": 10.077,
+          "end": 10.159
+        },
+        {
+          "word": "correction",
+          "start": 10.24,
+          "end": 10.693
+        },
+        {
+          "word": "creates",
+          "start": 10.762,
+          "end": 11.122
+        },
+        {
+          "word": "a",
+          "start": 11.157,
+          "end": 11.18
+        },
+        {
+          "word": "new",
+          "start": 11.262,
+          "end": 11.424
+        },
+        {
+          "word": "Walrus",
+          "start": 11.494,
+          "end": 11.889
+        },
+        {
+          "word": "blob",
+          "start": 11.935,
+          "end": 12.272
+        },
+        {
+          "word": "and",
+          "start": 12.458,
+          "end": 12.666
+        },
+        {
+          "word": "retires",
+          "start": 12.736,
+          "end": 13.166
+        },
+        {
+          "word": "the",
+          "start": 13.212,
+          "end": 13.282
+        },
+        {
+          "word": "previous",
+          "start": 13.328,
+          "end": 13.711
+        },
+        {
+          "word": "version",
+          "start": 13.769,
+          "end": 14.118
+        },
+        {
+          "word": "from",
+          "start": 14.176,
+          "end": 14.303
+        },
+        {
+          "word": "future",
+          "start": 14.373,
+          "end": 14.71
+        },
+        {
+          "word": "recall.",
+          "start": 14.756,
+          "end": 15.43
+        },
+        {
+          "word": "Saving",
+          "start": 15.894,
+          "end": 16.266
+        },
+        {
+          "word": "memory",
+          "start": 16.324,
+          "end": 16.625
+        },
+        {
+          "word": "starts",
+          "start": 16.695,
+          "end": 17.043
+        },
+        {
+          "word": "with",
+          "start": 17.078,
+          "end": 17.206
+        },
+        {
+          "word": "permission.",
+          "start": 17.252,
+          "end": 18.112
+        }
+      ],
+      "captions": [
+        {
+          "start": 116.35,
+          "end": 118.649,
+          "text": "Memory also needs a way to change."
+        },
+        {
+          "start": 118.97399999999999,
+          "end": 120.966,
+          "text": "In the Memories library, I can review"
+        },
+        {
+          "start": 120.97099999999999,
+          "end": 124.042,
+          "text": "confirmed records, search for relevant facts, and"
+        },
+        {
+          "start": 124.047,
+          "end": 125.92899999999999,
+          "text": "correct an outdated preference."
+        },
+        {
+          "start": 126.42699999999999,
+          "end": 128.76199999999997,
+          "text": "A correction creates a new Walrus blob"
+        },
+        {
+          "start": 128.808,
+          "end": 131.101,
+          "text": "and retires the previous version from future"
+        },
+        {
+          "start": 131.106,
+          "end": 131.92,
+          "text": "recall."
+        },
+        {
+          "start": 132.244,
+          "end": 134.60199999999998,
+          "text": "Saving memory starts with permission."
+        }
+      ]
+    },
+    {
+      "id": "07",
+      "title": "The engineering",
+      "start": 139,
+      "duration": 23,
+      "text": "Underneath: DeepSeek Flash, memory orchestration, Walrus, Neon for account state, and a persistent Photon messaging worker. The engineering challenges were real: ESM-only SDK imports, missing peer packages, reasoning tokens consuming response budgets, and duplicate workers. We addressed them and documented the lessons.",
+      "path": "audio/07-voice.mp3",
+      "voice_duration": 22.848435,
+      "offset": 139,
+      "words": [
+        {
+          "word": "Underneath:",
+          "start": 0,
+          "end": 0.639
+        },
+        {
+          "word": "DeepSeek",
+          "start": 0.824,
+          "end": 1.324
+        },
+        {
+          "word": "Flash,",
+          "start": 1.382,
+          "end": 1.962
+        },
+        {
+          "word": "memory",
+          "start": 2.183,
+          "end": 2.496
+        },
+        {
+          "word": "orchestration,",
+          "start": 2.554,
+          "end": 3.413
+        },
+        {
+          "word": "Walrus,",
+          "start": 3.576,
+          "end": 4.272
+        },
+        {
+          "word": "Neon",
+          "start": 4.493,
+          "end": 4.818
+        },
+        {
+          "word": "for",
+          "start": 4.876,
+          "end": 4.981
+        },
+        {
+          "word": "account",
+          "start": 5.027,
+          "end": 5.341
+        },
+        {
+          "word": "state,",
+          "start": 5.399,
+          "end": 5.875
+        },
+        {
+          "word": "and",
+          "start": 6.06,
+          "end": 6.2
+        },
+        {
+          "word": "a",
+          "start": 6.258,
+          "end": 6.281
+        },
+        {
+          "word": "persistent",
+          "start": 6.339,
+          "end": 6.827
+        },
+        {
+          "word": "Photon",
+          "start": 6.885,
+          "end": 7.314
+        },
+        {
+          "word": "messaging",
+          "start": 7.384,
+          "end": 7.79
+        },
+        {
+          "word": "worker.",
+          "start": 7.848,
+          "end": 8.371
+        },
+        {
+          "word": "The",
+          "start": 8.916,
+          "end": 9.033
+        },
+        {
+          "word": "engineering",
+          "start": 9.114,
+          "end": 9.648
+        },
+        {
+          "word": "challenges",
+          "start": 9.706,
+          "end": 10.205
+        },
+        {
+          "word": "were",
+          "start": 10.263,
+          "end": 10.414
+        },
+        {
+          "word": "real:",
+          "start": 10.461,
+          "end": 10.948
+        },
+        {
+          "word": "ESM-only",
+          "start": 11.204,
+          "end": 12.237
+        },
+        {
+          "word": "SDK",
+          "start": 12.318,
+          "end": 12.829
+        },
+        {
+          "word": "imports,",
+          "start": 12.992,
+          "end": 13.677
+        },
+        {
+          "word": "missing",
+          "start": 13.897,
+          "end": 14.245
+        },
+        {
+          "word": "peer",
+          "start": 14.327,
+          "end": 14.547
+        },
+        {
+          "word": "packages,",
+          "start": 14.605,
+          "end": 15.325
+        },
+        {
+          "word": "reasoning",
+          "start": 15.581,
+          "end": 16.01
+        },
+        {
+          "word": "tokens",
+          "start": 16.08,
+          "end": 16.521
+        },
+        {
+          "word": "consuming",
+          "start": 16.579,
+          "end": 17.102
+        },
+        {
+          "word": "response",
+          "start": 17.183,
+          "end": 17.624
+        },
+        {
+          "word": "budgets,",
+          "start": 17.67,
+          "end": 18.251
+        },
+        {
+          "word": "and",
+          "start": 18.437,
+          "end": 18.576
+        },
+        {
+          "word": "duplicate",
+          "start": 18.646,
+          "end": 19.122
+        },
+        {
+          "word": "workers.",
+          "start": 19.157,
+          "end": 19.772
+        },
+        {
+          "word": "We",
+          "start": 20.236,
+          "end": 20.376
+        },
+        {
+          "word": "addressed",
+          "start": 20.41,
+          "end": 20.77
+        },
+        {
+          "word": "them",
+          "start": 20.794,
+          "end": 20.968
+        },
+        {
+          "word": "and",
+          "start": 21.095,
+          "end": 21.246
+        },
+        {
+          "word": "documented",
+          "start": 21.304,
+          "end": 21.827
+        },
+        {
+          "word": "the",
+          "start": 21.862,
+          "end": 21.931
+        },
+        {
+          "word": "lessons.",
+          "start": 21.989,
+          "end": 22.848
+        }
+      ],
+      "captions": [
+        {
+          "start": 139,
+          "end": 143.41199999999998,
+          "text": "Underneath: DeepSeek Flash, memory orchestration, Walrus,"
+        },
+        {
+          "start": 143.493,
+          "end": 145.88,
+          "text": "Neon for account state, and a persistent"
+        },
+        {
+          "start": 145.885,
+          "end": 147.511,
+          "text": "Photon messaging worker."
+        },
+        {
+          "start": 147.916,
+          "end": 151.969,
+          "text": "The engineering challenges were real: ESM-only SDK"
+        },
+        {
+          "start": 151.992,
+          "end": 156.178,
+          "text": "imports, missing peer packages, reasoning tokens consuming"
+        },
+        {
+          "start": 156.183,
+          "end": 158.91199999999998,
+          "text": "response budgets, and duplicate workers."
+        },
+        {
+          "start": 159.236,
+          "end": 161.88,
+          "text": "We addressed them and documented the lessons."
+        }
+      ]
+    },
+    {
+      "id": "08",
+      "title": "The close",
+      "start": 162,
+      "duration": 13,
+      "text": "No fake bookings. No memory claims without proof. A concierge that remembers what matters and lets you correct it. Anghkooey. You shouldn't have to explain yourself twice.",
+      "path": "audio/08-voice.mp3",
+      "voice_duration": 11.192018,
+      "offset": 162.35,
+      "words": [
+        {
+          "word": "No",
+          "start": 0,
+          "end": 0.232
+        },
+        {
+          "word": "fake",
+          "start": 0.313,
+          "end": 0.569
+        },
+        {
+          "word": "bookings.",
+          "start": 0.604,
+          "end": 1.231
+        },
+        {
+          "word": "No",
+          "start": 1.416,
+          "end": 1.567
+        },
+        {
+          "word": "memory",
+          "start": 1.649,
+          "end": 1.962
+        },
+        {
+          "word": "claims",
+          "start": 2.02,
+          "end": 2.322
+        },
+        {
+          "word": "without",
+          "start": 2.357,
+          "end": 2.635
+        },
+        {
+          "word": "proof.",
+          "start": 2.694,
+          "end": 3.216
+        },
+        {
+          "word": "A",
+          "start": 3.855,
+          "end": 3.936
+        },
+        {
+          "word": "concierge",
+          "start": 4.017,
+          "end": 4.667
+        },
+        {
+          "word": "that",
+          "start": 4.702,
+          "end": 4.818
+        },
+        {
+          "word": "remembers",
+          "start": 4.865,
+          "end": 5.248
+        },
+        {
+          "word": "what",
+          "start": 5.283,
+          "end": 5.422
+        },
+        {
+          "word": "matters",
+          "start": 5.492,
+          "end": 5.817
+        },
+        {
+          "word": "and",
+          "start": 5.863,
+          "end": 5.944
+        },
+        {
+          "word": "lets",
+          "start": 5.991,
+          "end": 6.153
+        },
+        {
+          "word": "you",
+          "start": 6.188,
+          "end": 6.258
+        },
+        {
+          "word": "correct",
+          "start": 6.316,
+          "end": 6.641
+        },
+        {
+          "word": "it.",
+          "start": 6.699,
+          "end": 6.989
+        },
+        {
+          "word": "Anghkooey.",
+          "start": 7.535,
+          "end": 8.44
+        },
+        {
+          "word": "You",
+          "start": 8.905,
+          "end": 9.021
+        },
+        {
+          "word": "shouldn't",
+          "start": 9.056,
+          "end": 9.311
+        },
+        {
+          "word": "have",
+          "start": 9.334,
+          "end": 9.439
+        },
+        {
+          "word": "to",
+          "start": 9.462,
+          "end": 9.509
+        },
+        {
+          "word": "explain",
+          "start": 9.578,
+          "end": 9.95
+        },
+        {
+          "word": "yourself",
+          "start": 10.008,
+          "end": 10.344
+        },
+        {
+          "word": "twice.",
+          "start": 10.403,
+          "end": 11.192
+        }
+      ],
+      "captions": [
+        {
+          "start": 162.35,
+          "end": 163.72099999999998,
+          "text": "No fake bookings."
+        },
+        {
+          "start": 163.766,
+          "end": 165.706,
+          "text": "No memory claims without proof."
+        },
+        {
+          "start": 166.20499999999998,
+          "end": 168.336,
+          "text": "A concierge that remembers what matters and"
+        },
+        {
+          "start": 168.341,
+          "end": 169.47899999999998,
+          "text": "lets you correct it."
+        },
+        {
+          "start": 169.885,
+          "end": 170.92999999999998,
+          "text": "Anghkooey."
+        },
+        {
+          "start": 171.255,
+          "end": 173.682,
+          "text": "You shouldn't have to explain yourself twice."
+        }
+      ]
+    }
+  ],
+  "total_duration_s": 175
+}

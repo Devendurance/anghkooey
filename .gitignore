@@ -38,6 +38,7 @@ yarn-error.log*
 .vercel
 
 # local tooling, logs and agent scratch
+/videos/anghkooey-source-inspection/
 .playwright-mcp/
 logs/
 *.log

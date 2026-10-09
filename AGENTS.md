@@ -90,6 +90,14 @@
 - `POST /api/session` is rate-limited to 10/min per IP. Browser sweeps across many page loads will hit 429.
 - Real-Neon tests need `}, 60000);` timeouts. `vitest.config.mts` maps `@/` so tests can import route handlers.
 
+## VIDEO EVIDENCE
+
+- Film source lives in `videos/anghkooey-demo`. Private captures and original recordings must stay out of commits.
+- A fixed privacy mask can miss a code when the source page scrolls. Inspect the full selected range or exclude all code-value frames.
+- Supplied iMessage before/after questions differ. Only quiet hotels and natural light are visibly recalled. Never imply an empty account, controlled identical-query test, or linked-Web recall success.
+- Initialize `window.__timelines` before registering a HyperFrames root. Clamp caption end holds before the next phrase to avoid overlapping captions.
+- Keep failed-render frames until a verified final MP4 exists. Recover captures before starting another full render.
+
 <!-- BEGIN:nextjs-agent-rules -->
 
 ## This is NOT the Next.js you know

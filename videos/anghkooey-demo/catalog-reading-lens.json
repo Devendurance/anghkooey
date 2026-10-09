@@ -1,0 +1,445 @@
+{
+  "query": "spotlight magnify reading lens UI crop",
+  "tier": "words",
+  "tier_detail": "local word match",
+  "dropped": 0,
+  "unindexed": 0,
+  "shown": 25,
+  "total": 392,
+  "report_gap": "npx hyperframes feedback --search-miss \"spotlight magnify reading lens UI crop\" --wanted \"<the move you needed>\" --tier words",
+  "results": [
+    {
+      "name": "gravitational-lens",
+      "type": "block",
+      "title": "Gravitational Lens",
+      "description": "Shader transition with gravitational lensing distortion",
+      "tags": [
+        "transition",
+        "shader"
+      ],
+      "dimensions": {
+        "width": 1920,
+        "height": 1080
+      },
+      "duration": 4,
+      "preview": {
+        "video": "https://static.heygen.ai/hyperframes-oss/docs/images/catalog/blocks/gravitational-lens.mp4",
+        "poster": "https://static.heygen.ai/hyperframes-oss/docs/images/catalog/blocks/gravitational-lens.png"
+      }
+    },
+    {
+      "name": "spotlight-card",
+      "type": "component",
+      "title": "Spotlight Card",
+      "description": "A card with a scripted cursor spotlight and lit border.",
+      "tags": [
+        "effect"
+      ],
+      "preview": {
+        "poster": "https://static.heygen.ai/hyperframes-oss/docs/images/catalog/components/spotlight-card.png"
+      }
+    },
+    {
+      "name": "yt-feather-highlight",
+      "type": "component",
+      "title": "Feathered Spotlight",
+      "description": "Dims the frame except a feathered ellipse; the hole's position and size are CSS variables, so helpers glide the spotlight between targets",
+      "tags": [
+        "highlight",
+        "spotlight",
+        "effect",
+        "overlay"
+      ]
+    },
+    {
+      "name": "transitions-light",
+      "type": "block",
+      "title": "Light Transitions",
+      "description": "Showcase of light-based glow and flash transitions",
+      "tags": [
+        "transition",
+        "showcase"
+      ],
+      "dimensions": {
+        "width": 1920,
+        "height": 1080
+      },
+      "duration": 21,
+      "preview": {
+        "video": "https://static.heygen.ai/hyperframes-oss/docs/images/catalog/blocks/transitions-light.mp4",
+        "poster": "https://static.heygen.ai/hyperframes-oss/docs/images/catalog/blocks/transitions-light.png"
+      }
+    },
+    {
+      "name": "light-leak",
+      "type": "block",
+      "title": "Light Leak",
+      "description": "Shader transition with cinematic light leak overlay",
+      "tags": [
+        "transition",
+        "shader"
+      ],
+      "dimensions": {
+        "width": 1920,
+        "height": 1080
+      },
+      "duration": 4,
+      "preview": {
+        "video": "https://static.heygen.ai/hyperframes-oss/docs/images/catalog/blocks/light-leak.mp4",
+        "poster": "https://static.heygen.ai/hyperframes-oss/docs/images/catalog/blocks/light-leak.png"
+      }
+    },
+    {
+      "name": "vpn-youtube-spot",
+      "type": "block",
+      "title": "VPN YouTube Spot",
+      "description": "Snappy Apple-style YouTube insert showing a phone finding and installing a friendly VPN app with sound effects.",
+      "tags": [
+        "app",
+        "showcase",
+        "youtube",
+        "sfx"
+      ],
+      "dimensions": {
+        "width": 1920,
+        "height": 1080
+      },
+      "duration": 7,
+      "preview": {
+        "video": "https://static.heygen.ai/hyperframes-oss/docs/images/catalog/blocks/vpn-youtube-spot.mp4",
+        "poster": "https://static.heygen.ai/hyperframes-oss/docs/images/catalog/blocks/vpn-youtube-spot.png"
+      }
+    },
+    {
+      "name": "testimonial-card",
+      "type": "component",
+      "title": "Testimonial Card",
+      "description": "Reveals a customer quote at reading pace, then settles its avatar, author name, and handle beneath as a clean proof beat.",
+      "tags": [
+        "prop",
+        "ui-props",
+        "testimonial",
+        "social-proof",
+        "quote",
+        "prove"
+      ]
+    },
+    {
+      "name": "code-scroll",
+      "type": "block",
+      "title": "Code Scroll To Line",
+      "description": "The camera scrolls a long file to bring a target line to center and spotlights it — for walking through real modules.",
+      "tags": [
+        "code",
+        "code-animation",
+        "scroll",
+        "developer"
+      ],
+      "dimensions": {
+        "width": 1920,
+        "height": 1080
+      },
+      "duration": 6,
+      "preview": {
+        "video": "https://static.heygen.ai/hyperframes-oss/docs/images/catalog/blocks/code-scroll.mp4",
+        "poster": "https://static.heygen.ai/hyperframes-oss/docs/images/catalog/blocks/code-scroll.png"
+      }
+    },
+    {
+      "name": "organic-light-leak-overlay",
+      "type": "block",
+      "title": "Organic Light Leak Overlay",
+      "description": "Finite CSS light-leak overlay for memory beats and motivated transitions",
+      "tags": [
+        "light-leak",
+        "film",
+        "memory",
+        "transition",
+        "overlay",
+        "media-treatment-overlay"
+      ],
+      "dimensions": {
+        "width": 1920,
+        "height": 1080
+      },
+      "duration": 4,
+      "preview": {
+        "poster": "https://static.heygen.ai/hyperframes-oss/docs/images/catalog/blocks/organic-light-leak-overlay.png",
+        "video": "https://static.heygen.ai/hyperframes-oss/docs/images/catalog/blocks/organic-light-leak-overlay.mp4"
+      }
+    },
+    {
+      "name": "tracing-beam",
+      "type": "component",
+      "title": "Tracing Beam",
+      "description": "A glowing dash follows one SVG path through three UI elements, lifting and brightening each element in sequence.",
+      "tags": [
+        "motion-primitive",
+        "product-demo",
+        "attention",
+        "beam",
+        "path",
+        "spotlight"
+      ]
+    },
+    {
+      "name": "camera-shake",
+      "type": "component",
+      "title": "Camera Shake",
+      "description": "Procedural handheld, telephoto and rig camera shake for any wrapper: nine measured profiles with per-lens projection, closed-form and seek-safe",
+      "tags": [
+        "camera",
+        "shake",
+        "handheld",
+        "effect",
+        "cinematic"
+      ]
+    },
+    {
+      "name": "vfx-iphone-device",
+      "type": "block",
+      "title": "iPhone & MacBook 3D Showcase",
+      "description": "Real GLTF iPhone 15 Pro Max and MacBook Pro models with live HTML-in-Canvas screen content, morphing glass lens, product review camera choreography, and 360° turntable.",
+      "tags": [
+        "html-in-canvas",
+        "3d",
+        "device",
+        "iphone",
+        "macbook",
+        "gltf"
+      ],
+      "dimensions": {
+        "width": 1920,
+        "height": 1080
+      },
+      "duration": 15,
+      "preview": {
+        "video": "https://static.heygen.ai/hyperframes-oss/docs/images/catalog/blocks/vfx-iphone-device.mp4",
+        "poster": "https://static.heygen.ai/hyperframes-oss/docs/images/catalog/blocks/vfx-iphone-device.png"
+      }
+    },
+    {
+      "name": "chart-story",
+      "type": "component",
+      "title": "Chart Story",
+      "description": "One chart builds from data in reading order and lands the exact supplied values: staggered bars, a left-to-right line with area fill, a sweeping donut, or filling progress bars, with an accented value callout on the emphasized datum.",
+      "tags": [
+        "motion-primitive",
+        "proof",
+        "stats",
+        "chart",
+        "bars",
+        "line",
+        "donut",
+        "progress",
+        "deterministic"
+      ]
+    },
+    {
+      "name": "vfx-anamorphic-flare",
+      "type": "block",
+      "title": "Anamorphic Streak Flare",
+      "description": "A drifting field of bright points, each one throwing the long horizontal blue-violet streak a real anamorphic cinema lens produces. Built from the measured filter constants: a 0.3 high-pass, 80 horizontal taps at quarter resolution, a samples/3 gain and a 0x7a8aff tint.",
+      "tags": [
+        "vfx",
+        "background",
+        "showcase",
+        "optical",
+        "canvas"
+      ],
+      "dimensions": {
+        "width": 1920,
+        "height": 1080
+      },
+      "duration": 10
+    },
+    {
+      "name": "light-sweep-pass",
+      "type": "component",
+      "title": "Light Sweep Pass",
+      "description": "A traveling key light re-shades a slotted scene: a soft diagonal gradient band crosses the frame once while every per-element highlight and shadow shifts in lockstep (all driven by one --light-x property), then the light settles into a resting key. Quiet, expensive-feeling; the scene itself never moves. Callers fill the named scene slot; a token hero-and-cards default renders when it is left empty.",
+      "tags": [
+        "motion-primitive",
+        "overlay",
+        "light",
+        "sweep",
+        "slots",
+        "deterministic"
+      ]
+    },
+    {
+      "name": "shimmer-sweep",
+      "type": "component",
+      "title": "Shimmer Sweep",
+      "description": "Animated light sweep across text or elements using a CSS gradient mask — ideal for AI accents and premium reveals",
+      "tags": [
+        "text",
+        "shimmer",
+        "highlight",
+        "effect"
+      ],
+      "preview": {
+        "poster": "https://static.heygen.ai/hyperframes-oss/docs/images/catalog/components/shimmer-sweep.png"
+      }
+    },
+    {
+      "name": "godrays",
+      "type": "block",
+      "title": "Godrays",
+      "description": "Rays of light fan out from a corner and drift across a deep blue field. A WebGPU shader from the Shaders library (shaders.com, MIT).",
+      "tags": [
+        "webgpu",
+        "webgpu-shader",
+        "background",
+        "light",
+        "rays"
+      ],
+      "dimensions": {
+        "width": 1920,
+        "height": 1080
+      },
+      "duration": 2,
+      "preview": {
+        "video": "https://static.heygen.ai/hyperframes-oss/docs/images/catalog/blocks/godrays.mp4"
+      }
+    },
+    {
+      "name": "editorial-flash-overlay",
+      "type": "block",
+      "title": "Editorial Flash Overlay",
+      "description": "Finite neutral-warm light layers for a seek-safe camera-flash cut or social reveal",
+      "tags": [
+        "flash",
+        "editorial",
+        "social",
+        "light",
+        "transition",
+        "overlay",
+        "media-treatment-overlay"
+      ],
+      "dimensions": {
+        "width": 1920,
+        "height": 1080
+      },
+      "duration": 4,
+      "preview": {
+        "poster": "https://static.heygen.ai/hyperframes-oss/docs/images/catalog/blocks/editorial-flash-overlay.png",
+        "video": "https://static.heygen.ai/hyperframes-oss/docs/images/catalog/blocks/editorial-flash-overlay.mp4"
+      }
+    },
+    {
+      "name": "mk-progress-stat",
+      "type": "block",
+      "title": "Count-Up Stat Card",
+      "description": "Big-numeral statistic with count-up, label, thin progress track filling to value/max, and caption; light and dark schemes",
+      "tags": [
+        "data-viz",
+        "stat",
+        "minimal"
+      ],
+      "dimensions": {
+        "width": 1920,
+        "height": 1080
+      },
+      "duration": 7
+    },
+    {
+      "name": "mk-specs-list",
+      "type": "block",
+      "title": "Specs Checklist",
+      "description": "Left-aligned specs/traits checklist over footage or a board: rows slide in staggered with an accent underline sweep; light and dark schemes",
+      "tags": [
+        "data-viz",
+        "list",
+        "minimal",
+        "professional"
+      ],
+      "dimensions": {
+        "width": 1920,
+        "height": 1080
+      },
+      "duration": 8
+    },
+    {
+      "name": "drift-hold",
+      "type": "component",
+      "title": "Drift Hold",
+      "description": "A centered content card stays subtly alive through loop-exact rotation, scale breathing, and a slow light sweep.",
+      "tags": [
+        "motion-primitive",
+        "camera",
+        "ambient",
+        "drift",
+        "hold",
+        "loopable"
+      ]
+    },
+    {
+      "name": "lt-neon-border",
+      "type": "block",
+      "title": "Neon Border",
+      "description": "Two arcs of light travel the edge of a rounded panel and snap corner to corner, trailing a soft three-layer bloom. A lower third for a name and role.",
+      "tags": [
+        "lower-third",
+        "glow",
+        "loop",
+        "video-primitive"
+      ],
+      "dimensions": {
+        "width": 1920,
+        "height": 1080
+      },
+      "duration": 4.8
+    },
+    {
+      "name": "weight-wave",
+      "type": "block",
+      "title": "Weight Wave",
+      "description": "A crest of thickness travels along a headline: each character swells from light to black and leans forward as the wave passes, driven by the wght and slnt variable-font axes rather than by transforms.",
+      "tags": [
+        "typography",
+        "kinetic-type",
+        "title",
+        "variable-font",
+        "text"
+      ],
+      "dimensions": {
+        "width": 1920,
+        "height": 1080
+      },
+      "duration": 6
+    },
+    {
+      "name": "halftone-field",
+      "type": "block",
+      "title": "Halftone Field",
+      "description": "A full-bleed halftone light field: a grid of dots whose size and colour track a slow flowing simplex-noise field, so broad bands of light sweep across a mostly-black frame like a giant LED wall showing a plasma. Built to run under type.",
+      "tags": [
+        "webgl",
+        "shader",
+        "background",
+        "texture",
+        "halftone"
+      ],
+      "dimensions": {
+        "width": 1920,
+        "height": 1080
+      },
+      "duration": 10
+    },
+    {
+      "name": "facet-morph",
+      "type": "component",
+      "title": "Facet Morph",
+      "description": "A faceted low-poly mass of 36 triangles continuously reshapes between three authored silhouettes (blob, mark, badge) with per-facet flat shading that recomputes as the vertices move. Light reads from the upper left; lit facets lift toward a pale accent-tinted tone while turned-away facets fall toward near-black. One calm continuous morph, then a settled hold.",
+      "tags": [
+        "motion-primitive",
+        "intro",
+        "morph",
+        "low-poly",
+        "svg",
+        "deterministic"
+      ]
+    }
+  ]
+}

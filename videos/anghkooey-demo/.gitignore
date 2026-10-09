@@ -1,0 +1,27 @@
+# Original recordings, private captures and temporary inspection stay local.
+/capture/
+/brand-capture/
+/reference/
+/evidence-*/
+/snapshots/
+/verification/
+/.hyperframes/
+/.thumbnails/
+/.waveform-cache/
+/*.hf-transaction-*/
+/.hf-*/
+/renders/
+/node_modules/
+*.log
+/render-pid.txt
+/*-FINAL-*.mp4
+/*-master.mp4
+/*-caption-clean.mp4
+/audio/*.wav
+/assets/*-original.png
+/assets/profile-code.mp4
+/check*.json
+/lint*.json
+/usage.json
+
+# Safe staged media and narration remain versioned for an editable project.
