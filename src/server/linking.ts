@@ -34,18 +34,56 @@ export type ConfirmInput = {
 
 export type MergeChannel = "telegram" | "imessage";
 
-/** All user ids whose Walrus namespaces belong to one canonical identity. */
-export async function getAliasUserIds(canonicalUserId: string): Promise<string[]> {
+/** Maximum merge-relationship hops followed while resolving an identity family. */
+const MAX_IDENTITY_HOPS = 25;
+
+/**
+ * All user ids whose Walrus namespaces belong to one canonical identity.
+ * Accepts any family member: resolves to the ultimate root first, then
+ * collects every descendant across chained merges (A -> B -> C) and
+ * branches. Cycle-safe: visited ids are never revisited and traversal
+ * stops after MAX_IDENTITY_HOPS levels. Only ids reachable through the
+ * merge graph are returned; unrelated accounts are never included.
+ */
+export async function getAliasUserIds(userId: string): Promise<string[]> {
   const sql = getSql();
-  const rows = await sql`select merged_user_id from user_merges where canonical_user_id = ${canonicalUserId}`;
-  return [canonicalUserId, ...rows.map((r) => r.merged_user_id as string)];
+  const canonical = await getCanonicalUserId(userId).catch(() => userId);
+  const family = new Set<string>([canonical]);
+  let frontier = [canonical];
+  for (let i = 0; i < MAX_IDENTITY_HOPS && frontier.length > 0; i++) {
+    const rows = await sql`select merged_user_id from user_merges where canonical_user_id = any(${frontier})`;
+    const next: string[] = [];
+    for (const r of rows) {
+      const id = r.merged_user_id as string;
+      if (id && !family.has(id)) {
+        family.add(id);
+        next.push(id);
+      }
+    }
+    frontier = next;
+  }
+  return [...family];
 }
 
-/** Resolve any merged user id to its canonical user id (identity if already canonical). */
+/**
+ * Resolve any merged user id to its ultimate canonical user id (identity
+ * when already canonical). Follows chained merges safely: stops on
+ * self-loops, previously seen ids (cycles), and after MAX_IDENTITY_HOPS.
+ */
 export async function getCanonicalUserId(userId: string): Promise<string> {
   const sql = getSql();
-  const rows = await sql`select canonical_user_id from user_merges where merged_user_id = ${userId} limit 1`;
-  return rows.length ? (rows[0].canonical_user_id as string) : userId;
+  let current = userId;
+  const seen = new Set<string>([userId]);
+  for (let i = 0; i < MAX_IDENTITY_HOPS; i++) {
+    const rows =
+      await sql`select canonical_user_id from user_merges where merged_user_id = ${current} limit 1`;
+    if (rows.length === 0) return current;
+    const next = rows[0].canonical_user_id as string;
+    if (!next || next === current || seen.has(next)) return current;
+    seen.add(next);
+    current = next;
+  }
+  return current;
 }
 
 export type ChannelStatus = {

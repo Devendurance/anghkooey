@@ -158,13 +158,20 @@ export function Memories() {
               </p>
             ) : null}
 
+            <MatchSearch
+              consent={consent}
+              stateOf={(id) => memories.find((x) => x.blobId === id)?.state}
+              onMatches={(ms) => setTexts((t) => ({ ...t, ...Object.fromEntries(ms.map((m) => [m.blobId, m.text])) }))}
+              onCorrected={onCorrected}
+            />
+
             {total === 0 ? (
               <div className="mem-empty">
                 <p className="mem-empty-title">Nothing saved yet.</p>
                 <p className="mem-text">
                   {consent
-                    ? "Tell Anghkooey a preference in chat. When a memory is confirmed on Walrus, it appears here."
-                    : "Turn memory on, then tell Anghkooey a preference in chat. Confirmed memories appear here."}
+                    ? "Tell Anghkooey a preference in chat. When a memory is confirmed on Walrus, it appears here. You can still use search above: it looks up matching memories by meaning, not the full list."
+                    : "Turn memory on, then tell Anghkooey a preference in chat. Confirmed memories appear here. You can still use search above: it looks up matching memories by meaning, not the full list."}
                 </p>
                 <Link href="/chat" className="app-btn app-btn-primary">
                   Go to chat
@@ -172,14 +179,6 @@ export function Memories() {
                 </Link>
               </div>
             ) : (
-              <>
-                <MatchSearch
-                  consent={consent}
-                  stateOf={(id) => memories.find((x) => x.blobId === id)?.state}
-                  onMatches={(ms) => setTexts((t) => ({ ...t, ...Object.fromEntries(ms.map((m) => [m.blobId, m.text])) }))}
-                  onCorrected={onCorrected}
-                />
-
                 <section aria-labelledby="archive-title" className="mem-archive">
                   <div className="mem-archive-head">
                     <h2 id="archive-title" className="mem-h2">
@@ -232,7 +231,6 @@ export function Memories() {
                     </ul>
                   )}
                 </section>
-              </>
             )}
 
             <p className="mem-foot">

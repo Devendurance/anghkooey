@@ -95,13 +95,23 @@ describe("memory corrections across canonical and merged identities (real Neon)"
       ok: false,
       status: 404,
     });
-    // A merged id is not a canonical identity: it cannot reach the canonical user's memories.
-    expect(await correctMemory({ canonicalUserId: channel, oldBlobId: mine, text }, { saveFact: okSave })).toMatchObject({
-      ok: false,
-      status: 404,
-    });
     expect(writes).toBe(before);
     expect((await row(mine))?.state).toBe("active");
+  }, 60000);
+
+  it("lets a merged family member correct a family memory into the root namespace", async () => {
+    const mine = await addMemory(web, "familyshare");
+    let wroteFor = "";
+    const res = await correctMemory(
+      { canonicalUserId: channel, oldBlobId: mine, text },
+      { saveFact: async (a) => ((wroteFor = a.userId), okSave(a)) }
+    );
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    // Replacement lands in the root namespace even when a member session asks.
+    expect(wroteFor).toBe(web);
+    expect(await row(res.newBlobId)).toMatchObject({ user_id: web, state: "active" });
+    expect((await row(mine))?.state).toBe("superseded");
   }, 60000);
 
   it("keeps the old memory active when the Walrus write fails, and allows a retry", async () => {

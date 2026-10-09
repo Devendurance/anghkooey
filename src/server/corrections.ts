@@ -1,4 +1,4 @@
-import { getAliasUserIds } from "./linking";
+import { getAliasUserIds, getCanonicalUserId } from "./linking";
 import { saveFact as defaultSaveFact } from "./memwal";
 import { namespaceFor } from "./namespace";
 import {
@@ -37,7 +37,10 @@ export async function correctMemory(
   deps: { saveFact?: SaveFact } = {}
 ): Promise<CorrectionResult> {
   const saveFact = deps.saveFact ?? defaultSaveFact;
-  const { canonicalUserId, oldBlobId } = args;
+  const { oldBlobId } = args;
+  // Canonicalize: a member session still writes the replacement into the
+  // root namespace while ownership spans the whole family.
+  const canonicalUserId = await getCanonicalUserId(args.canonicalUserId).catch(() => args.canonicalUserId);
   const ids = await getAliasUserIds(canonicalUserId).catch(() => [canonicalUserId]);
   const existing = await getMemoryForUsers(ids, oldBlobId);
   if (!existing) return { ok: false, status: 404, code: "not_found", message: "Memory not found" };

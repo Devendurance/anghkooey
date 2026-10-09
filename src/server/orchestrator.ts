@@ -83,6 +83,18 @@ export async function handleMessage(input: HandleMessageInput): Promise<ChatResu
   const provider = input.channel;
   const eventId = input.deliveryId ?? `${input.sessionId}:${hash12(text)}`;
 
+  // Canonicalize once: member sessions read and write through the ultimate
+  // root so chained/branched families share one memory namespace.
+  let canonicalUserId = input.canonicalUserId;
+  if (hasDb()) {
+    try {
+      const { getCanonicalUserId } = await import("./linking");
+      canonicalUserId = await getCanonicalUserId(input.canonicalUserId).catch(() => input.canonicalUserId);
+    } catch {
+      canonicalUserId = input.canonicalUserId;
+    }
+  }
+
   if (hasDb()) {
     try {
       // Atomic claim: exactly one concurrent worker owns this delivery.
@@ -102,13 +114,13 @@ export async function handleMessage(input: HandleMessageInput): Promise<ChatResu
   let memories: MemoryHit[] = [];
   if (hasMemory()) {
     try {
-      let idGroup = [input.canonicalUserId];
+      let idGroup = [canonicalUserId];
       if (hasDb()) {
         try {
           const { getAliasUserIds } = await import("./linking");
-          idGroup = await getAliasUserIds(input.canonicalUserId);
+          idGroup = await getAliasUserIds(canonicalUserId);
         } catch {
-          idGroup = [input.canonicalUserId];
+          idGroup = [canonicalUserId];
         }
       }
       const per = await Promise.all(
@@ -197,7 +209,7 @@ export async function handleMessage(input: HandleMessageInput): Promise<ChatResu
         const idem = `${eventId}:fact:${i}`;
         try {
           const saved = await saveFact({
-            userId: input.canonicalUserId,
+            userId: canonicalUserId,
             text: storageText,
             idempotencyKey: idem,
           });
@@ -206,7 +218,7 @@ export async function handleMessage(input: HandleMessageInput): Promise<ChatResu
           if (hasDb()) {
             try {
               await recordMemoryJob({
-                userId: input.canonicalUserId,
+                userId: canonicalUserId,
                 namespace: saved.namespace,
                 jobId: saved.jobId,
                 status: "done",
@@ -214,7 +226,7 @@ export async function handleMessage(input: HandleMessageInput): Promise<ChatResu
               });
               await recordMemoryActive({
                 blobId: saved.blobId,
-                userId: input.canonicalUserId,
+                userId: canonicalUserId,
                 memoryKey: f.memory_key,
                 category: f.category,
               });
@@ -225,8 +237,8 @@ export async function handleMessage(input: HandleMessageInput): Promise<ChatResu
               // outside the alias set are never touched.
               try {
                 const { getAliasUserIds } = await import("./linking");
-                const aliasIds = await getAliasUserIds(input.canonicalUserId).catch(() => [
-                  input.canonicalUserId,
+                const aliasIds = await getAliasUserIds(canonicalUserId).catch(() => [
+                  canonicalUserId,
                 ]);
                 const priors: { blobId: string; ownerId: string }[] = [];
                 if (f.correction_of) {
@@ -276,8 +288,8 @@ export async function handleMessage(input: HandleMessageInput): Promise<ChatResu
           if (hasDb()) {
             try {
               await recordMemoryJob({
-                userId: input.canonicalUserId,
-                namespace: `anghkooey:v1:u:${input.canonicalUserId}`,
+                userId: canonicalUserId,
+                namespace: `anghkooey:v1:u:${canonicalUserId}`,
                 jobId: idem,
                 status: "failed",
                 errorCode: "walrus_write_failed",
@@ -311,7 +323,7 @@ export async function handleMessage(input: HandleMessageInput): Promise<ChatResu
     JSON.stringify({
       trace_id: traceId,
       channel: provider,
-      user_hash: hash12(input.canonicalUserId),
+      user_hash: hash12(canonicalUserId),
       model,
       recall_count: memories.length,
       blob_ids: receipts.map((r) => r.blobId),

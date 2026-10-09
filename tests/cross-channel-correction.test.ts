@@ -125,6 +125,24 @@ describe("orchestrator cross-channel chat corrections (real Neon, mocked Walrus)
     expect((await row(old))?.user_id).toBe(channel);
   }, 60000);
 
+  it("saves under the root namespace when a merged member starts the chat", async () => {
+    mocks.extraction = factJson([
+      { ...baseFact, memory_key: "travel.window", text: "I always want a window seat on daytime flights for the views." },
+    ]);
+    mocks.saves.length = 0;
+    const res = await handleMessage({
+      canonicalUserId: channel,
+      channel: "telegram",
+      sessionId: (await newSession(channel)).sessionId,
+      deliveryId: `xchan-member-${t}`,
+      text: "I always want a window seat on daytime flights.",
+      allowMemorySave: true,
+    });
+    expect(res.saves.completed).toBe(1);
+    expect(mocks.saves[0].userId).toBe(web);
+    blobs.push(res.savedBlobIds[0]);
+  }, 60000);
+
   it("never retires a stranger's blob for the same key", async () => {
     const other = await addMemory(stranger, "stranger", "stay.room");
     mocks.extraction = factJson([baseFact]);
