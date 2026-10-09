@@ -1,26 +1,137 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+@theme {
+  --color-night: #05080f;
+  --color-night-deep: #02040a;
+  --color-raised: #0b1119;
+  --color-cream: #f4eedf;
+  --color-cream-70: rgb(244 238 223 / 0.7);
+  --color-cream-55: rgb(244 238 223 / 0.55);
+  --color-cream-35: rgb(244 238 223 / 0.35);
+  --color-hairline: rgb(244 238 223 / 0.18);
+  --color-hairline-strong: rgb(244 238 223 / 0.32);
+  --color-glass: rgb(244 238 223 / 0.05);
+  --color-glass-border: rgb(244 238 223 / 0.14);
+  --color-brand: #d8dcff;
+  --color-halo: #4f5cff;
+  --color-abyss: #1f6aa0;
+  --color-amber: #f6b25b;
+  --color-flare: #ffe9c2;
+  --color-ember: #e8602c;
+
+  --ease-lid: cubic-bezier(0.65, 0, 0.15, 1);
+  --ease-out-soft: cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-display: var(--font-cormorant), "Cormorant", "Playfair Display", Georgia, serif;
+  --font-ui: var(--font-satoshi), "General Sans", -apple-system, "Segoe UI", sans-serif;
+  --font-label: var(--font-georama), var(--font-satoshi), system-ui, sans-serif;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html {
+  background: var(--color-night);
+  color-scheme: dark;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--color-night);
+  color: var(--color-cream);
+  font-family: var(--font-ui);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-brand);
+  outline-offset: 3px;
+}
+
+::selection {
+  background: rgb(79 92 255 / 0.35);
+}
+
+@layer components {
+  .t-h1 {
+    font-family: var(--font-display);
+    font-weight: 400;
+    font-size: 40px;
+    line-height: 44px;
+    letter-spacing: -0.01em;
+    color: var(--color-cream);
+    text-wrap: balance;
+  }
+  .t-lead {
+    font-family: var(--font-ui);
+    font-size: 16px;
+    line-height: 26px;
+    color: var(--color-cream-70);
+    text-wrap: pretty;
+  }
+  .t-label {
+    font-family: var(--font-label);
+    font-size: 11px;
+    line-height: 14px;
+    font-weight: 400;
+    letter-spacing: 0.24em;
+    text-transform: uppercase;
+    color: var(--color-cream-55);
+  }
+  .t-nav {
+    font-family: var(--font-ui);
+    font-size: 12px;
+    line-height: 16px;
+    font-weight: 500;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  .t-caption {
+    font-family: var(--font-ui);
+    font-size: 14px;
+    line-height: 20px;
+    color: var(--color-cream-55);
+  }
+
+  @media (min-width: 640px) {
+    .t-h1 {
+      font-size: 52px;
+      line-height: 56px;
+    }
+    .t-lead {
+      font-size: 18px;
+      line-height: 30px;
+    }
+  }
+  @media (min-width: 1024px) {
+    .t-h1 {
+      font-size: clamp(44px, 7.6svh, 64px);
+      line-height: 1.07;
+    }
+  }
+}
+
+/* Nav backdrop once content scrolls beneath it. */
+[data-nav-backdrop] {
+  position: fixed;
+  inset: 0 0 auto;
+  z-index: 50;
+  height: calc(112px + env(safe-area-inset-top));
+  background: linear-gradient(180deg, var(--color-night) 55%, rgb(5 8 15 / 0));
+  opacity: 0;
+  transition: opacity 300ms var(--ease-out-soft);
+  pointer-events: none;
+}
+[data-nav-backdrop][data-solid] {
+  opacity: 1;
+}
+@media (min-width: 640px) {
+  [data-nav-backdrop] {
+    height: calc(128px + env(safe-area-inset-top));
+  }
+}
+
+/* Landing motion boot states. html[data-motion] is set before paint by the layout boot script. */
+html[data-motion="full"] [data-landing] [data-nav-mark],
+html[data-motion="full"] [data-landing] [data-nav-wordmark] {
+  opacity: 0;
 }
