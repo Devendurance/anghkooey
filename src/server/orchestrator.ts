@@ -7,7 +7,7 @@ import {
   parseFactsPayload,
   validateFacts,
 } from "./extract";
-import { recallFacts, saveFact } from "./memwal";
+import { classifyMemwalError, recallFacts, saveFact, type MemwalDiagnosis } from "./memwal";
 import { assertUUID } from "./namespace";
 import { buildGroundedMessages, type MemoryHit, type RecallStatus } from "./prompts";
 import {
@@ -137,11 +137,20 @@ export async function handleMessage(input: HandleMessageInput): Promise<ChatResu
           aliasComplete = false;
         }
       }
+      const recallStarted = Date.now();
       const settled = await Promise.all(
         idGroup.map((uid) =>
           recallFacts({ userId: uid, query: text, limit: 10, maxDistance: 0.7 }).then(
-            (hits) => ({ ok: true as const, hits }),
-            () => ({ ok: false as const, hits: [] as MemoryHit[] })
+            (hits) => ({ ok: true as const, hits, diagnosis: null as MemwalDiagnosis | null }),
+            (e: unknown) => ({
+              ok: false as const,
+              hits: [] as MemoryHit[],
+              diagnosis:
+                ((e as { diagnosis?: MemwalDiagnosis }).diagnosis ?? {
+                  ...classifyMemwalError(e),
+                  durationMs: 0,
+                }),
+            })
           )
         )
       );
@@ -150,6 +159,28 @@ export async function handleMessage(input: HandleMessageInput): Promise<ChatResu
         recallStatus = "unavailable";
       } else if (failed > 0 || !aliasComplete) {
         recallStatus = "partial";
+      }
+      // Sanitized recall summary for production triage. No query text,
+      // no memory plaintext, no credentials, no raw user ids.
+      if (failed > 0) {
+        const diags = settled.flatMap((r) => (r.diagnosis ? [r.diagnosis] : []));
+        const counts = new Map<string, number>();
+        for (const d of diags) counts.set(d.category, (counts.get(d.category) ?? 0) + 1);
+        const top = [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? "unknown";
+        const first = diags.find((d) => d.category === top);
+        console.error(
+          JSON.stringify({
+            op: "recall",
+            trace_id: traceId,
+            category: top,
+            httpStatus: first?.httpStatus ?? null,
+            code: first?.code ?? null,
+            retryable: diags.some((d) => d.retryable),
+            durationMs: Date.now() - recallStarted,
+            nsFailed: failed,
+            nsTotal: settled.length,
+          })
+        );
       }
       const seen = new Set<string>();
       const raw = settled

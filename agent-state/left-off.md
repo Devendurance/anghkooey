@@ -1,6 +1,6 @@
 # Current checkpoint
-- Task: Anghkooey production memory recall diagnostic + honest-recall fix.
-- Done: read-only Neon/Walrus diagnostic confirmed known blob Q9aePj..85jo (stay.lighting_preference, active) in owner f7de72cc, family of 4 under canonical a1d73601 with Telegram + iMessage linked. Topical recall succeeds at distance 0.38-0.55 in owner namespace; generic meta queries miss at 0.81-0.86 by vector distance, not by failure. Walrus lookups succeeded, not failed. Threshold gap confirmed at boundary (hotel 0.707, light 0.719 miss 0.7 but hit 0.8).
-- Done: fix tracks recallStatus ok/partial/unavailable per namespace, honest prompts, /api/chat memoryStatus, Web distinct retriable UI, Photon notices, regression tests with mocks. Tests 61 passed, typecheck/lint-focused/build pass. No Mainnet writes, no identity merges, no cross-account fallback.
-- Next: commit and push focused fix, report AWS worker update commands for anghkooey-photon under /opt/anghkooey. Untested owner actions: real browser session-token recall flow, Telegram owner reply via Photon.
-- Evidence limits: 20-user channel:evidence is bounded, not a full inventory. Walrus dashboard zero is pre-July-30 migration scope, not new memories. Never claim empty account from zero semantic hits.
+- Task: production Walrus recall/search outage fix.
+- Done: root cause narrowed to Vercel-side MemWal failure on all namespaces (local recall works, 2 hits at 0.38). Exact error class still needs one production recall with new classified logging. Most likely 401 AUTH_REJECTED from invalid or mismatched Vercel MEMWAL keys.
+- Done: memwal failure classification plus one bounded transient-only retry, sanitized logs (op/category/status/code/duration, no secrets). Search route settled fan-out with searchStatus partial. Orchestrator recallDiag summary. Tests 74 passed, typecheck/lint/build pass. No new blobs, no re-merges, no DB reset.
+- Next: commit and push, verify Vercel deployment READY, then owner triggers one production chat or search and reads Vercel logs for op memwal_recall or recall or search lines. Untested: authenticated production recall receipt, production search matches, failure-state UI in prod.
+- Evidence limits: 20-user channel:evidence is bounded, not a full inventory. Dashboard zero is pre-July-30 migration scope. Never claim empty account from zero hits.

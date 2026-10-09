@@ -7,13 +7,17 @@ const mocks = vi.hoisted(() => ({
   lastPrompt: "" as string,
 }));
 
-vi.mock("../src/server/memwal", () => ({
-  recallFacts: vi.fn(async (args: { userId: string; query: string }) => {
-    if (mocks.recallImpl) return mocks.recallImpl(args);
-    return [];
-  }),
-  saveFact: vi.fn(async () => { throw new Error("saveFact should not run with consent off"); }),
-}));
+vi.mock("../src/server/memwal", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../src/server/memwal")>();
+  return {
+    ...actual,
+    recallFacts: vi.fn(async (args: { userId: string; query: string }) => {
+      if (mocks.recallImpl) return mocks.recallImpl(args);
+      return [];
+    }),
+    saveFact: vi.fn(async () => { throw new Error("saveFact should not run with consent off"); }),
+  };
+});
 
 vi.mock("../src/server/deepseek", () => ({
   chatComplete: vi.fn(async (args: { messages: { content: string }[] }) => {
