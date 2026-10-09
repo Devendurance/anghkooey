@@ -2,16 +2,26 @@ import { getSql } from "./db";
 
 /** Operational metadata only. Walrus holds durable fact content. */
 
+/**
+ * Duplicate unless no attempt exists or the prior attempt failed.
+ * "failed" releases the event so a redelivery can be retried;
+ * "processing"/"done"/"processed" stay deduplicated.
+ */
+export function isDuplicateInboundStatus(status: string | null): boolean {
+  return status === "processing" || status === "done" || status === "processed";
+}
+
 export async function checkInboundEvent(
   provider: string,
   providerEventId: string
 ): Promise<boolean> {
   const sql = getSql();
-  const rows = await sql`
-    select 1 from inbound_events
+  const rows = (await sql`
+    select status from inbound_events
     where provider = ${provider} and provider_event_id = ${providerEventId}
-    limit 1`;
-  return rows.length > 0;
+    limit 1`) as { status: string }[];
+  if (rows.length === 0) return false;
+  return isDuplicateInboundStatus(rows[0]?.status ?? null);
 }
 
 export async function markInboundEvent(
@@ -23,7 +33,7 @@ export async function markInboundEvent(
   await sql`
     insert into inbound_events (provider, provider_event_id, status)
     values (${provider}, ${providerEventId}, ${status})
-    on conflict (provider, provider_event_id) do nothing`;
+    on conflict (provider, provider_event_id) do update set status = excluded.status`;
 }
 
 export async function recordMemoryJob(args: {

@@ -4,6 +4,7 @@ import {
   buildExtractionPrompt,
   formatFactForStorage,
   isSaveWorthy,
+  parseFactsPayload,
   validateFacts,
 } from "./extract";
 import { recallFacts, saveFact } from "./memwal";
@@ -136,14 +137,26 @@ export async function handleMessage(input: HandleMessageInput): Promise<ChatResu
     }
   }
 
-  // 3. Grounded answer via DeepSeek.
+  // 3. Grounded answer via DeepSeek (non-thinking mode, one bounded
+  // retry inside chatComplete). A failure here releases the inbound event
+  // so a redelivery can be retried instead of being lost as a duplicate.
   const model = process.env.DEEPSEEK_MODEL ?? "deepseek-flash";
-  const answer = await chatComplete({
-    messages: buildGroundedMessages({ userText: text, memories, history }),
-    // deepseek-flash spends budget on reasoning_content first; keep headroom
-    // so the visible answer is not starved on grounded prompts.
-    maxTokens: 1000,
-  });
+  let answer: string;
+  try {
+    answer = await chatComplete({
+      messages: buildGroundedMessages({ userText: text, memories, history }),
+      maxTokens: 1000,
+    });
+  } catch (e) {
+    if (hasDb()) {
+      try {
+        await markInboundEvent(provider, eventId, "failed");
+      } catch {
+        // best effort
+      }
+    }
+    throw e;
+  }
 
   if (hasDb()) {
     try {
@@ -162,16 +175,14 @@ export async function handleMessage(input: HandleMessageInput): Promise<ChatResu
     try {
       const rawJson = await chatComplete({
         messages: [{ role: "user", content: buildExtractionPrompt(text) }],
-        // Reasoning models spend large budget on reasoning_content before JSON.
         maxTokens: 2000,
         temperature: 0.2,
         jsonMode: true,
       });
-      const parsed: unknown = JSON.parse(rawJson);
-      const items = Array.isArray(parsed)
-        ? parsed
-        : (parsed as { facts?: unknown }).facts ?? [];
-      const facts = validateFacts(items).filter(isSaveWorthy).slice(0, 2);
+      // Malformed or empty extraction never blocks the answer and never
+      // saves: parseFactsPayload yields [] and every candidate still
+      // passes validateFacts + isSaveWorthy + confirmed Walrus persistence.
+      const facts = validateFacts(parseFactsPayload(rawJson)).filter(isSaveWorthy).slice(0, 2);
       for (let i = 0; i < facts.length; i++) {
         const f = facts[i];
         const storageText = formatFactForStorage(f);

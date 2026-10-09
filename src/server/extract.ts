@@ -24,6 +24,31 @@ export function validateFacts(input: unknown): FactCandidate[] {
   return parsed.data;
 }
 
+/**
+ * Safely parse model extraction output into candidate items.
+ * Never throws: empty, fence-wrapped or malformed input yields [].
+ * Parsing alone never saves anything; validateFacts + isSaveWorthy +
+ * confirmed Walrus persistence still gate every save downstream.
+ */
+export function parseFactsPayload(raw: string): unknown[] {
+  const text = raw
+    .trim()
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/\s*```$/, "");
+  if (!text) return [];
+  try {
+    const parsed: unknown = JSON.parse(text);
+    if (Array.isArray(parsed)) return parsed;
+    if (parsed && typeof parsed === "object") {
+      const facts = (parsed as { facts?: unknown }).facts;
+      if (Array.isArray(facts)) return facts;
+    }
+    return [];
+  } catch {
+    return [];
+  }
+}
+
 const SECRET_PATTERNS = [
   /password/i,
   /seed phrase/i,

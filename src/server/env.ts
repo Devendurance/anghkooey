@@ -6,6 +6,11 @@ const envSchema = z.object({
   // Official current model: deepseek-flash at https://api.deepseek.com.
   // Fully configurable via DEEPSEEK_MODEL; no silent fallback elsewhere.
   DEEPSEEK_MODEL: z.string().min(1).default("deepseek-flash"),
+  // Reasoning models think before answering. Thinking is model-default ON
+  // and burns output tokens before visible content. Routine concierge
+  // answers and extraction run non-thinking; set "enabled" only if a
+  // future feature genuinely needs reasoning traces (never user-facing).
+  DEEPSEEK_THINKING: z.enum(["enabled", "disabled"]).default("disabled"),
   DATABASE_URL: z.string().min(1, "DATABASE_URL is required"),
   MEMWAL_PRIVATE_KEY: z.string().min(1, "MEMWAL_PRIVATE_KEY is required"),
   MEMWAL_ACCOUNT_ID: z.string().min(1, "MEMWAL_ACCOUNT_ID is required"),
@@ -44,6 +49,7 @@ export function envDiagnostics(): Record<string, "present" | "missing"> {
     "DEEPSEEK_API_KEY",
     "DEEPSEEK_BASE_URL",
     "DEEPSEEK_MODEL",
+    "DEEPSEEK_THINKING",
     "DATABASE_URL",
     "MEMWAL_PRIVATE_KEY",
     "MEMWAL_ACCOUNT_ID",
