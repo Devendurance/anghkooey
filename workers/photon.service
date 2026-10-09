@@ -1,0 +1,13 @@
+[Unit]
+Description=Anghkooey Photon worker (Telegram + iMessage)
+After=network.target
+
+[Service]
+WorkingDirectory=/opt/anghkooey
+EnvironmentFile=/opt/anghkooey/.env
+ExecStart=/usr/bin/npm run worker:start
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

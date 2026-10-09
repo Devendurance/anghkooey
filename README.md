@@ -67,4 +67,4 @@ npx tsx scripts/test-channel-flow.ts  # real-services channel path, 1 Mainnet wr
 
 Linking: web code from `POST /api/link/start`, send it as one in-channel message. The worker confirms with the sender id from the verified Photon event. `POST /api/link/confirm` accepts provider=web only (telegram/imessage over HTTP get 403). Details: `docs/DEPLOY-PHOTON.md`.
 
-Docs: `docs/PRD.md`, `docs/TRD.md`, `docs/architecture.md`, `docs/project plan.md`. Status: `BACKEND-STATUS.md`. Blockers: `BACKEND-BLOCKERS.md`.
+Docs: `docs/PRD.md`, `docs/TRD.md`, `docs/architecture.md`, `docs/project plan.md`. Deploy: `docs/DEPLOY-WEB.md` (Vercel site), `docs/DEPLOY-PHOTON.md` (persistent worker). Status: `BACKEND-STATUS.md`. Blockers: `BACKEND-BLOCKERS.md`.

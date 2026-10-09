@@ -1,0 +1,12 @@
+# Anghkooey Photon worker image.
+# Long-lived process for Telegram + iMessage via Photon Cloud.
+# Never runs inside a Next.js serverless function.
+# Restart policy lives on the host (Railway/Render/Fly always-restart,
+# or systemd Restart=always on a VPS). Env comes from the host dashboard,
+# never baked into the image. See docs/DEPLOY-PHOTON.md.
+FROM node:20-slim
+WORKDIR /app
+COPY package.json package-lock.json ./
+RUN npm ci --legacy-peer-deps
+COPY . .
+CMD ["npm", "run", "worker:start"]
