@@ -56,7 +56,7 @@ export function SiteNav() {
                 href={l.href}
                 aria-current={i === 0 ? "page" : undefined}
                 {...(l.external ? { target: "_blank", rel: "noopener noreferrer" } : {})}
-                className={`t-nav inline-flex min-h-6 items-center gap-1 rounded-full transition-colors duration-200 ${i === 0 ? "text-cream" : "text-cream-55 hover:text-cream"}`}
+                className={`t-nav ${l.wide ? "hidden lg:inline-flex" : "inline-flex"} min-h-6 items-center gap-1 rounded-full transition-colors duration-200 ${i === 0 ? "text-cream" : "text-cream-55 hover:text-cream"}`}
               >
                 {l.label}
                 {l.external ? <ArrowUpRight aria-hidden className="size-3" strokeWidth={1.5} /> : null}

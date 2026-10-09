@@ -13,6 +13,7 @@ import { BRAND_ASSETS, INTRO_SEEN_KEY, START_TALKING } from "@/lib/site";
 import { APERTURE_OPEN, Aperture, drawAperture } from "./Aperture";
 import { Orb } from "./Orb";
 import { Ornaments } from "./Ornaments";
+import { Sections } from "./Sections";
 import "./landing.css";
 
 gsap.registerPlugin(ScrollTrigger, useGSAP);
@@ -300,6 +301,8 @@ export function Landing() {
             </div>
           </div>
         </section>
+
+        <Sections />
       </main>
     </div>
   );

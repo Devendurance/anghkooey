@@ -20,6 +20,10 @@ export function FoldedA({ className, alt = "", eager }: Props) {
       fetchPriority={eager ? "high" : undefined}
       unoptimized
       draggable={false}
+      // A failed asset disappears rather than showing a broken-image glyph.
+      onError={(e) => {
+        e.currentTarget.style.visibility = "hidden";
+      }}
       className={className}
     />
   );

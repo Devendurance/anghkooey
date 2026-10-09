@@ -61,6 +61,23 @@ body {
     color: var(--color-cream);
     text-wrap: balance;
   }
+  .t-h2 {
+    font-family: var(--font-display);
+    font-weight: 400;
+    font-size: 32px;
+    line-height: 38px;
+    letter-spacing: -0.01em;
+    color: var(--color-cream);
+    text-wrap: balance;
+  }
+  .t-h3 {
+    font-family: var(--font-display);
+    font-weight: 400;
+    font-size: 28px;
+    line-height: 34px;
+    color: var(--color-cream);
+    text-wrap: balance;
+  }
   .t-lead {
     font-family: var(--font-ui);
     font-size: 16px;
@@ -97,6 +114,14 @@ body {
       font-size: 52px;
       line-height: 56px;
     }
+    .t-h2 {
+      font-size: 40px;
+      line-height: 46px;
+    }
+    .t-h3 {
+      font-size: 34px;
+      line-height: 40px;
+    }
     .t-lead {
       font-size: 18px;
       line-height: 30px;
@@ -106,6 +131,10 @@ body {
     .t-h1 {
       font-size: clamp(44px, 7.6svh, 64px);
       line-height: 1.07;
+    }
+    .t-h2 {
+      font-size: 48px;
+      line-height: 54px;
     }
   }
 }

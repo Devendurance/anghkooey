@@ -12,14 +12,15 @@
 
 ## Frontend stages (landing)
 - [x] 4A: brand foundation + folded-A intro + cinematic orb hero + wordmark dock + hero copy + Start Talking
-- [ ] 4B: landing sections (features spotlight, memory story, channel continuity), bottom HUD
-- [ ] 4C: CTA band + footer (Image B)
+- [x] 4B: storytelling sections (memory story + how-it-works spotlight, everyday-experiences bento, channel continuity, privacy and control)
+- [ ] 4C: CTA band + footer (Image B), bottom HUD
 - [ ] App: /chat, /memories, /settings on existing API
 
 ## Current slice
-- 4A done. Next: 4B.
+- 4B done. Next: 4C.
 
 ## Completed
+- 4B (2026-10-09): src/components/landing/Sections.tsx + sections.css, rendered after the hero in Landing.tsx. Sections #story, #experiences, #channels, #control. t-h2/t-h3 in globals.css. Nav pill adds How it works + Privacy from lg up (NAV_LINKS.wide). Motion: ScrollTrigger.batch entrances (show-only, never re-hide), lens drift, spokes clip reveal; reduced motion and no-JS show everything static. Channel status is honest: Telegram available, iMessage in testing (no public number), Web coming soon. Bento lenses are original CSS art, no third-party images. FoldedA hides itself on load error. Browser-checked 360/390/768/1280/1440, reverse scroll, keyboard focus reveal, reduced motion, asset failure, no horizontal overflow.
 - Repo published (2026-10-09): https://github.com/Devendurance/anghkooey, branch main. Commits: deps/config 245a24f, backend+Photon 224b9ed, 4A bd88d96, orb polish eb3beac, typecheck typegen 6b13b1e.
 - 4A polish: CSS orb relit (sun point clear of wordmark, rim glare, deeper sky, grass grain). Supplied figure-in-orb reference evaluated locally only: rights unconfirmed and too low-res, not committed.
 - Secure account consolidation: migration 003_merge, in-channel MERGE YES/NO state machine (src/server/linking.ts), alias-aware memory union, real-Neon test tests/merge-consolidation.test.ts.
@@ -32,18 +33,18 @@
 - Next.js 16 App Router + full HTTP API: evidence: src/app/api/*, src/server/*
   - status: working, live-verified
 - Photon worker: evidence: workers/photon-worker.ts, src/server/channel-identity.ts, scripts/photon-readiness|channel-evidence|test-channel-flow.ts
-  - status: implemented, transport live, human-sent message tests pending owner
+  - status: implemented, transport live. Owner confirmed Telegram and iMessage consolidation and Telegram-to-iMessage Walrus recall. Reverse direction (iMessage-to-Telegram) human check not yet recorded.
 
 ## Remaining MVP gaps
-- gap: owner-sent Telegram/iMessage message tests
-  - why it blocks the demo: end-to-end human proof pending
-  - next smallest complete slice: owner runs worker + sends test messages per BACKEND-BLOCKERS.md
+- gap: reverse-direction human recall check (state on iMessage, recall on Telegram)
+  - why it blocks the demo: only one direction is owner-verified
+  - next smallest complete slice: owner runs the check per BACKEND-BLOCKERS.md step 2
 - gap: frontend + 3x10 submission evidence
   - why it blocks the demo: hackathon submission needs UI + tester volume
   - next smallest complete slice: frontend build (outside fast-build)
 
 ## Blockers
-- Owner in-channel consolidation: send web code via Telegram, reply MERGE YES, repeat on iMessage (steps in BACKEND-BLOCKERS.md). Then cross-channel recall check.
+- Owner: reverse-direction recall check (iMessage to Telegram) and 3x10 tester evidence. Consolidation on both channels is done.
 
 ## Verification
 - 13 tests passed (incl. real-Neon merge state machine). typecheck/lint/build pass. git diff --check clean. Migration 003_merge applied.
@@ -55,4 +56,4 @@
 - No orb video supplied: orb is CSS art. Production orb loop still missing.
 
 ## Next action
-- Frontend 4B (landing sections). Owner: channel consolidation per BACKEND-BLOCKERS.md still pending.
+- Frontend 4C (CTA band, footer, bottom HUD). Owner: reverse-direction recall check and 3x10 evidence still pending.

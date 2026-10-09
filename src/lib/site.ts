@@ -8,9 +8,12 @@ export const START_TALKING = {
   hint: "Opens Anghkooey on Telegram",
 } as const;
 
+// `wide` links only fit the centred desktop pill from lg up; the mobile menu shows all.
 export const NAV_LINKS = [
-  { label: "Overview", href: "#top", external: false },
-  { label: "Telegram", href: TELEGRAM_BOT_URL, external: true },
+  { label: "Overview", href: "#top", external: false, wide: false },
+  { label: "How it works", href: "#story", external: false, wide: true },
+  { label: "Privacy", href: "#control", external: false, wide: true },
+  { label: "Telegram", href: TELEGRAM_BOT_URL, external: true, wide: false },
 ] as const;
 
 export const BRAND_ASSETS = {
