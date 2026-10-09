@@ -17,15 +17,19 @@
 
 ## Stage 4D: functional web app (one slice per session)
 - [x] 4D.1: /chat + session UX (done 2026-10-09)
-- [ ] 4D.2: /memories, real records + corrections (GET /api/memories is metadata only: inspect MemWal SDK before showing any memory text; label semantic search honestly; correction UI updates only after Walrus confirms)
+- [x] 4D.2: /memories, real records + corrections (done 2026-10-09)
 - [ ] 4D.3: /profile (link code via POST /api/link/start, expiry countdown, copy, channel status read API if needed, MERGE YES guidance) + /settings (GET/PATCH /api/settings, session expiry, DELETE /api/session, session end != Walrus erase)
 - [ ] 4D.4: integrated browser QA + release verification (chat -> save -> new conv -> recall -> review -> correct -> recall; link flow; 360/390/768/1280/1440)
 - Identity rules: no wallet, no email, no fake unlink/delete. Add each route to APP_NAV in src/lib/site.ts only when its page exists.
 
 ## Current slice
-- 4D.1 done. Next: 4D.2 /memories.
+- 4D.2 done. Next: 4D.3 /profile + /settings.
 
 ## Completed
+- 4D.2 (2026-10-09): /memories = src/app/memories/page.tsx + src/components/app/Memories.tsx (mem-* in app.css); APP_NAV gains Memories. Shared browser helpers in src/lib/app-client.ts (call, errorMessage, shortBlob, factText, topicLabel), Chat.tsx reuses them. MemWal 0.1.8 has no get-by-blob: restore() returns counts only, recall() is semantic top-K. So the archive shows metadata only (category, topic from memory_key, saved date, state, short blob + copy, replaced-by link). Text appears only via POST /api/memories/search (bounded recall across alias namespaces, limit 8, hits kept only if metadata is in the alias set, labelled "Matching memories"). GET /api/memories adds totals {active, superseded}.
+- 4D.2 security fix: PATCH /api/memories/[id] -> src/server/corrections.ts correctMemory(). Ownership = getMemoryForUsers(getAliasUserIds(session user)), new fact saved to canonical namespace, markSuperseded under the old row's real owner id (merged blobs now drop out of recall), per-blob lock claimCorrectionLock on inbound_events provider 'memory-correction' (failed or >5 min stale reclaimable, no migration), failed write -> 502 with old memory active, 6/min rate limit. tests/memory-correction.test.ts (real Neon, fake saveFact): canonical, merged, unauthorized incl. merged-id-as-caller, failed write + retry, concurrent conflict.
+- 4D.2 live check: search returned real stored text; 1 Mainnet correction write y7ZvRr..4h_U -> VfuxUL..R-0I, UI showed pending then new blob, counts 1 active / 1 replaced, Replaced filter shows "Replaced by"; chat recall afterwards used only VfuxUL. A second session got empty list/search, 403 without consent, 404 patching the other user's blob. No overflow at 360/390/768/1280; keyboard filters with focus ring; empty state; offline settings failure keeps state.
+- Known gap (orchestrator, not changed): in-chat corrections (extract correction_of / findActiveBlobForKey) still supersede under the canonical id only, so a fact in a merged namespace corrected via chat stays recallable. Fix needs the same owner lookup in orchestrator.ts and a Photon worker redeploy.
 - 4D.1 (2026-10-09): /chat = src/app/chat/page.tsx + src/components/app/{AppShell,Chat}.tsx + app.css. New minimal API src/app/api/conversations/route.ts: POST creates an owned web conversation, GET ?id= returns the unexpired transcript (ownership-checked, 24h TTL = RECENT_MESSAGE_TTL_HOURS in repo.ts, getConversationMessages). ChatResult/POST /api/chat now also return savedBlobIds (confirmed Walrus writes only). Client: session via POST /api/session, conversation id in localStorage ak:conv:<userId>, idempotencyKey per message reused on Retry (failed events are reclaimable), 409 reloads transcript, 401 shows the session-ended banner, 404 drops the conversation, 429/502 messages, unsent text kept (Retry/Edit). Receipts show recalled fact + domain + short blob, "No saved memory matched", "Saved to Walrus Mainnet <blob>", "Memory save failed", "Memory off, nothing saved". Memory switch opens the consent panel and PATCHes /api/settings. Light Markdown rendered without HTML injection. START_TALKING -> /chat; the CTA band goes to /chat with a Telegram alt link; Web channel card + footer now say web chat is available. FoldedA marked "use client" (onError broke server use).
 - 4D.1 live check: real DeepSeek reply with memory off (no write); 1 Mainnet write after consent (blob y7ZvRr..4h_U, badge appeared only after confirmation); fresh conversation recalled it with a receipt; reload restored the transcript; second session got 404 reading or posting into another user's conversation; 401/400/403 paths verified with curl. No overflow at 360/768/1280/1440 (390 visually checked), reduced motion stops the typing dots.
 - 4C (2026-10-09): CtaBand + BottomHud in src/components/landing/Closing.tsx + closing.css; SiteFooter in src/components/brand/SiteFooter.tsx + footer.css; rendered from Landing.tsx (old placeholder footer removed from page.tsx). CTA ribbon = owner-supplied render, public/brand/anghkooey/web/cta-ribbon.webp (1024x576, 40KB, lazy, screen blend + feathered masks), slot in BRAND_ASSETS.ribbon accepts transparent WebP/PNG; CSS conic-ring fallback on load error. Viewfinder CTA "Tell Anghkooey one thing" -> Telegram, destination stated. Footer: real links only (anchors, Telegram, GitHub repo); iMessage "In testing", Web chat "Coming soon" as plain text; no legal pages exist so none linked. HUD desktop-only (>=1024): Telegram button, section counter, dot pager; hidden over hero and footer (visibility hidden, not focusable). No sound toggle (no audio). Duplicate Start Talking row removed from #control. Browser-checked 360/390/768/1280/1440, menu, pager keyboard, reduced motion, ribbon fallback, no overflow.
@@ -56,6 +60,7 @@
 - Owner: reverse-direction recall check (iMessage to Telegram) and 3x10 tester evidence. Consolidation on both channels is done.
 
 ## Verification
+- 4D.2: 30 tests passed, 4 skipped (7 files), typecheck/lint/build pass, git diff --check clean.
 - 4D.1: 25 tests passed, 4 skipped (6 files), typecheck/lint/build pass, git diff --check clean.
 - 13 tests passed (incl. real-Neon merge state machine). typecheck/lint/build pass. git diff --check clean. Migration 003_merge applied.
 - 2026-10-09 recheck after .env restore: tests 13/13, typecheck/lint/build pass, check:integrations db/deepseek/walrus ok, photon:readiness ok. Fresh clone: npm ci + build pass without .env.
@@ -66,5 +71,5 @@
 - No orb video supplied: orb is CSS art. Production orb loop still missing.
 
 ## Next action
-- 4D.2 /memories. Owner: reverse-direction recall check and 3x10 evidence still pending. Wanted assets: higher-res ribbon (>=2400px, transparent), production orb loop.
+- 4D.3 /profile + /settings. Owner: reverse-direction recall check and 3x10 evidence still pending. Wanted assets: higher-res ribbon (>=2400px, transparent), production orb loop.
 - Dev gotcha: Next allows one `next dev` per repo dir. A long-running dev server keeps a stale cached env (getEnv) across hotfixes: it sent no DeepSeek `thinking.type` and got 422. For live checks use `next build && next start -p <port>`, or restart dev.

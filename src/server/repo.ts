@@ -253,6 +253,78 @@ export async function getMemoryForUser(
   };
 }
 
+/** Ownership lookup within a verified alias set (canonical + merged ids). Returns the owning user id. */
+export async function getMemoryForUsers(
+  userIds: string[],
+  blobId: string
+): Promise<(MemoryRow & { userId: string }) | null> {
+  const sql = getSql();
+  const rows = await sql`select blob_id, user_id, memory_key, category, state, supersedes_blob_id, created_at from memory_metadata where user_id = any(${userIds}) and blob_id = ${blobId} limit 1`;
+  if (rows.length === 0) return null;
+  const r = rows[0];
+  return {
+    blobId: r.blob_id as string,
+    userId: r.user_id as string,
+    memoryKey: (r.memory_key as string | null) ?? null,
+    category: (r.category as string | null) ?? null,
+    state: r.state as string,
+    supersedesBlobId: (r.supersedes_blob_id as string | null) ?? null,
+    createdAt: (r.created_at as Date).toISOString(),
+  };
+}
+
+export async function countMemoriesUnion(userIds: string[]): Promise<{ active: number; superseded: number }> {
+  const sql = getSql();
+  const rows = await sql`
+    select
+      count(*) filter (where state = 'active')::int as active,
+      count(*) filter (where state = 'superseded')::int as superseded
+    from memory_metadata where user_id = any(${userIds})`;
+  return { active: Number(rows[0]?.active ?? 0), superseded: Number(rows[0]?.superseded ?? 0) };
+}
+
+/** Metadata for the given blobs, restricted to the alias set. */
+export async function getMemoriesByBlobIds(userIds: string[], blobIds: string[]): Promise<MemoryRow[]> {
+  if (blobIds.length === 0) return [];
+  const sql = getSql();
+  const rows = await sql`select blob_id, memory_key, category, state, supersedes_blob_id, created_at from memory_metadata where user_id = any(${userIds}) and blob_id = any(${blobIds})`;
+  return rows.map((r) => ({
+    blobId: r.blob_id as string,
+    memoryKey: (r.memory_key as string | null) ?? null,
+    category: (r.category as string | null) ?? null,
+    state: r.state as string,
+    supersedesBlobId: (r.supersedes_blob_id as string | null) ?? null,
+    createdAt: (r.created_at as Date).toISOString(),
+  }));
+}
+
+const CORRECTION_LOCK = "memory-correction";
+const CORRECTION_LOCK_STALE_MINUTES = 5;
+
+/**
+ * Atomic per-blob correction lock on inbound_events (no migration).
+ * A failed or stale (crashed) attempt can be reclaimed.
+ */
+export async function claimCorrectionLock(blobId: string): Promise<boolean> {
+  const sql = getSql();
+  const inserted = await sql`
+    insert into inbound_events (provider, provider_event_id, status)
+    values (${CORRECTION_LOCK}, ${blobId}, 'processing')
+    on conflict (provider, provider_event_id) do nothing
+    returning status`;
+  if (inserted.length > 0) return true;
+  const reclaimed = await sql`
+    update inbound_events set status = 'processing', processed_at = now()
+    where provider = ${CORRECTION_LOCK} and provider_event_id = ${blobId}
+      and (status = 'failed' or (status = 'processing' and processed_at < now() - (${CORRECTION_LOCK_STALE_MINUTES} * interval '1 minute')))
+    returning status`;
+  return reclaimed.length > 0;
+}
+
+export async function releaseCorrectionLock(blobId: string, status: "done" | "failed") {
+  await markInboundEvent(CORRECTION_LOCK, blobId, status);
+}
+
 export async function createConversationSession(
   userId: string,
   channel = "web"

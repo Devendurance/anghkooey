@@ -1,6 +1,6 @@
 import { err, ok, requireSession } from "@/server/api";
 import { getAliasUserIds } from "@/server/linking";
-import { listMemoriesUnion } from "@/server/repo";
+import { countMemoriesUnion, listMemoriesUnion } from "@/server/repo";
 
 
 /** List only the requesting user's memory metadata. Walrus content stays server-side. */
@@ -14,8 +14,9 @@ export async function GET(req: Request) {
     const limitParam = Number(url.searchParams.get("limit") ?? "50");
     const limit = Number.isFinite(limitParam) ? Math.min(Math.max(Math.floor(limitParam), 1), 100) : 50;
     const ids = await getAliasUserIds(auth.session.userId).catch(() => [auth.session.userId]);
-    const memories = await listMemoriesUnion(ids, { state, limit });
+    const [memories, totals] = await Promise.all([listMemoriesUnion(ids, { state, limit }), countMemoriesUnion(ids)]);
     return ok({
+      totals,
       memories: memories.map((m) => ({
         blobId: m.blobId,
         memoryKey: m.memoryKey,

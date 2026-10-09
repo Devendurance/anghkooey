@@ -9,7 +9,10 @@ export const START_TALKING = {
 } as const;
 
 // Web app routes. Add an entry only when its page exists, so the nav never shows a dead link.
-export const APP_NAV = [{ key: "chat", label: "Chat", href: "/chat" }] as const;
+export const APP_NAV = [
+  { key: "chat", label: "Chat", href: "/chat" },
+  { key: "memories", label: "Memories", href: "/memories" },
+] as const;
 
 export const CONVERSATION_KEY_PREFIX = "ak:conv:";
 

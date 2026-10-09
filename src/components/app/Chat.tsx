@@ -3,6 +3,7 @@
 import { ArrowUp, Plus, RotateCw } from "lucide-react";
 import { useCallback, useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import { FoldedA } from "@/components/brand/FoldedA";
+import { call, errorMessage, factText, shortBlob, type ApiResult } from "@/lib/app-client";
 import { CONVERSATION_KEY_PREFIX } from "@/lib/site";
 
 type Receipt = { blobId: string; reason: string };
@@ -24,8 +25,6 @@ type Msg = {
 
 type Session = { userId: string; expiresAt: string; consent: boolean };
 type Phase = "booting" | "ready" | "boot-failed" | "expired";
-type ApiResult = { status: number; ok: boolean; body: Record<string, unknown> };
-
 const MAX_CHARS = 4000;
 const RETENTION_HOURS = 24;
 const SLOW_AFTER_MS = 9000;
@@ -36,21 +35,10 @@ const STARTERS = [
   "I prefer direct flights, even if they cost a little more.",
 ];
 
-async function call(path: string, init?: RequestInit): Promise<ApiResult> {
-  const res = await fetch(path, {
-    ...init,
-    credentials: "same-origin",
-    headers: init?.body ? { "Content-Type": "application/json" } : undefined,
-  });
-  const body = (await res.json().catch(() => ({}))) as Record<string, unknown>;
-  return { status: res.status, ok: res.ok && body.ok === true, body };
-}
-
 function apiMessage(r: ApiResult): string {
-  const e = r.body.error as { message?: string } | undefined;
   if (r.status === 429) return "You're sending messages quickly. Wait a minute, then retry.";
   if (r.status === 502) return "The chat provider didn't respond. Your message is safe, retry when ready.";
-  return e?.message ?? "Something went wrong. Retry when ready.";
+  return errorMessage(r, "Something went wrong. Retry when ready.");
 }
 
 /** Renders the light Markdown DeepSeek emits (bold, bullets, headings) as React nodes. Never injects HTML. */
@@ -70,17 +58,7 @@ function RichText({ text }: { text: string }) {
   });
 }
 
-const RECEIPT_CAP = 140;
-
-/** Shows the stored fact sentence from a recall receipt; the server caps receipts at 140 chars. */
-function receiptText(reason: string): { domain: string | null; fact: string } {
-  const domain = reason.match(/DOMAIN:\s*([a-z_]+)/i)?.[1] ?? null;
-  const fact = reason.match(/FACT:\s*([\s\S]*)$/)?.[1]?.trim() || reason;
-  return { domain, fact: reason.length >= RECEIPT_CAP ? `${fact}…` : fact };
-}
-
 const uid = () => crypto.randomUUID();
-const shortBlob = (id: string) => (id.length > 14 ? `${id.slice(0, 6)}…${id.slice(-4)}` : id);
 const storeKey = (userId: string) => `${CONVERSATION_KEY_PREFIX}${userId}`;
 
 function readStored(userId: string): { id: string; at: number } | null {
@@ -537,7 +515,7 @@ function Receipts({ m }: { m: Msg }) {
           </summary>
           <ul>
             {receipts.map((r) => {
-              const { domain, fact } = receiptText(r.reason);
+              const { domain, fact } = factText(r.reason, true);
               return (
                 <li key={r.blobId}>
                   <span>{fact}</span>

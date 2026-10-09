@@ -1,11 +1,11 @@
 import { z } from "zod";
 import { checkOrigin, err, ok, readJsonBody, requireSession } from "@/server/api";
-import { saveFact } from "@/server/memwal";
-import { getMemoryForUser, markSuperseded, recordMemoryActive, recordMemoryJob } from "@/server/repo";
+import { correctMemory } from "@/server/corrections";
+import { checkRateLimit, rateLimitedResponse } from "@/server/rate-limit";
 
 
 const patchSchema = z.object({
-  text: z.string().min(12, "correction text too short").max(500, "correction text too long"),
+  text: z.string().trim().min(12, "correction text too short").max(500, "correction text too long"),
   memoryKey: z.string().max(80).optional(),
   category: z.enum(["hotel", "travel", "dining"]).optional(),
 });
@@ -13,6 +13,7 @@ const patchSchema = z.object({
 /**
  * Correct a stored memory. Append-only: writes a new confirmed Walrus blob,
  * then marks the old blob superseded. Never edits the old blob in place.
+ * Ownership spans the session user's canonical + merged identities only.
  */
 export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }> }) {
   const originErr = checkOrigin(req);
@@ -22,6 +23,8 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
   if (auth.session.consentAt === null) {
     return err(403, "consent_required", "Enable memory consent before correcting memories");
   }
+  const rl = await checkRateLimit(`correct:${auth.session.userId}`, 6, 60_000);
+  if (!rl.allowed) return err(429, "rate_limited", rateLimitedResponse().error.message);
 
   const { id } = await ctx.params;
   const oldBlobId = decodeURIComponent(id ?? "").slice(0, 128);
@@ -35,65 +38,16 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
   }
 
   try {
-    const existing = await getMemoryForUser(auth.session.userId, oldBlobId);
-    if (!existing) return err(404, "not_found", "Memory not found");
-    if (existing.state === "superseded") {
-      return err(409, "already_superseded", "That memory was already corrected");
-    }
-
-    const memoryKey = parsed.data.memoryKey ?? existing.memoryKey ?? "user.correction";
-    const category = parsed.data.category ?? (existing.category as "hotel" | "travel" | "dining" | null) ?? "hotel";
-    const recorded = new Date().toISOString().slice(0, 10);
-    const storageText = [
-      "TYPE: user-stated preference fact",
-      `DOMAIN: ${category}`,
-      `KEY: ${memoryKey}`,
-      `FACT: ${parsed.data.text}`,
-      "WHY: user correction via API",
-      "SCOPE: durable preference",
-      `RECORDED: ${recorded}`,
-      "SOURCE: stated directly by the user",
-      `CORRECTS: ${oldBlobId}`,
-    ].join("\n");
-
-    let saved: { namespace: string; jobId: string; blobId: string };
-    try {
-      saved = await saveFact({ userId: auth.session.userId, text: storageText, timeoutMs: 90000 });
-    } catch {
-      await recordMemoryJob({
-        userId: auth.session.userId,
-        namespace: `anghkooey:v1:u:${auth.session.userId}`,
-        jobId: `correction:${oldBlobId}:${Date.now()}`,
-        status: "failed",
-        errorCode: "walrus_write_failed",
-      }).catch(() => {});
-      return err(502, "upstream", "Could not confirm the correction write. Old memory left unchanged.");
-    }
-
-    await recordMemoryJob({
-      userId: auth.session.userId,
-      namespace: saved.namespace,
-      jobId: saved.jobId,
-      status: "done",
-      blobId: saved.blobId,
-    });
-    await recordMemoryActive({
-      blobId: saved.blobId,
-      userId: auth.session.userId,
-      memoryKey,
-      category,
-    });
-    await markSuperseded({ oldBlobId, newBlobId: saved.blobId, userId: auth.session.userId });
-
+    const result = await correctMemory({ canonicalUserId: auth.session.userId, oldBlobId, ...parsed.data });
+    if (!result.ok) return err(result.status, result.code, result.message);
     return ok({
-      oldBlobId,
-      newBlobId: saved.blobId,
+      oldBlobId: result.oldBlobId,
+      newBlobId: result.newBlobId,
       status: "active",
       previousState: "superseded",
-      jobId: saved.jobId,
+      jobId: result.jobId,
     });
-  } catch (e) {
-    if (e instanceof Error && /not found/i.test(e.message)) return err(404, "not_found", "Memory not found");
+  } catch {
     return err(500, "internal", "Correction failed. Try again.");
   }
 }
