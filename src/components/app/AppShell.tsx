@@ -30,7 +30,7 @@ export function AppShell({ active, children }: Props) {
               {item.label}
             </Link>
           ))}
-          <a href={TELEGRAM_BOT_URL} target="_blank" rel="noopener noreferrer" className="app-nav-link">
+          <a href={TELEGRAM_BOT_URL} target="_blank" rel="noopener noreferrer" className="app-nav-link app-nav-ext">
             Telegram
             <ArrowUpRight aria-hidden className="size-3.5" strokeWidth={1.5} />
             <span className="sr-only"> (opens @useanghkooey_bot in a new tab)</span>

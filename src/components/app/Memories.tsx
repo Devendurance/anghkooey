@@ -101,7 +101,8 @@ export function Memories() {
           <p className="mem-eyebrow">Your memory</p>
           <h1 className="mem-title">What Anghkooey remembers</h1>
           <p className="mem-lead">
-            Each memory is an encrypted blob on Walrus Mainnet, in a namespace that belongs to you. This archive lists
+            Each memory is a blob on Walrus Mainnet, encrypted by the MemWal relayer and kept in a namespace Anghkooey
+            reserves for you. This archive lists
             the confirmed records: what they&rsquo;re about, when they were saved, and their Walrus blob ID.
           </p>
         </header>

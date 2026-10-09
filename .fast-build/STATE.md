@@ -18,14 +18,16 @@
 ## Stage 4D: functional web app (one slice per session)
 - [x] 4D.1: /chat + session UX (done 2026-10-09)
 - [x] 4D.2: /memories, real records + corrections (done 2026-10-09)
-- [ ] 4D.3: /profile (link code via POST /api/link/start, expiry countdown, copy, channel status read API if needed, MERGE YES guidance) + /settings (GET/PATCH /api/settings, session expiry, DELETE /api/session, session end != Walrus erase)
+- [x] 4D.3: /profile + /settings (done 2026-10-09)
 - [ ] 4D.4: integrated browser QA + release verification (chat -> save -> new conv -> recall -> review -> correct -> recall; link flow; 360/390/768/1280/1440)
 - Identity rules: no wallet, no email, no fake unlink/delete. Add each route to APP_NAV in src/lib/site.ts only when its page exists.
 
 ## Current slice
-- 4D.2 done. Next: 4D.3 /profile + /settings.
+- 4D.3 done. Next: 4D.4 integrated QA + release verification.
 
 ## Completed
+- 4D.3 (2026-10-09): /profile = src/app/profile/page.tsx + src/components/app/Profile.tsx; /settings = src/app/settings/page.tsx + Settings.tsx (acct-* in app.css, reuses mem-*). APP_NAV gains Profile + Settings, Telegram nav link hidden <768px. New GET /api/channels -> getChannelStatus() in linking.ts: per provider {linked, verified, verifiedAt, approvalExpiresAt}, alias-aware via canonical + user_merges, plus consolidatedAccounts count. No sender ids, user ids or memory counts. Profile: code via POST /api/link/start kept in React state only, countdown, copy, auto-cleared on expiry or once its channel is linked/awaiting; Check status + refresh on tab return; "Awaiting MERGE YES" banner from pending merge_requests. Note: the worker's resolveChannelUser creates a channel user before the code is checked, so a first link nearly always goes through MERGE YES. Settings: role=switch consent with confirm before enabling, storage/Seal/relayer accuracy copy, session expiry, End session with confirm -> DELETE /api/session, clears ak:conv:* keys, ended state. Copy fixed: Memories/Chat no longer imply user-held encryption. vitest.config.mts adds the @ alias so tests can import route handlers. tests/account-linking.test.ts (real Neon, 9 tests).
+- 4D.3 QA: real code generated + copied (clipboard matched, not in URL/storage/cookie), expiry clears it. Linked/awaiting states checked with a synthetic sender fixture (DB only, deleted after), not a real Photon event. Consent on/off and End session (401 after, keys cleared, new identity on return) on a throwaway session. No overflow 360-1440, focus ring on all controls, reduced motion. The Playwright test identity (memory VfuxUL) was re-issued a session server-side after its cookie was replaced during QA.
 - 4D.2 (2026-10-09): /memories = src/app/memories/page.tsx + src/components/app/Memories.tsx (mem-* in app.css); APP_NAV gains Memories. Shared browser helpers in src/lib/app-client.ts (call, errorMessage, shortBlob, factText, topicLabel), Chat.tsx reuses them. MemWal 0.1.8 has no get-by-blob: restore() returns counts only, recall() is semantic top-K. So the archive shows metadata only (category, topic from memory_key, saved date, state, short blob + copy, replaced-by link). Text appears only via POST /api/memories/search (bounded recall across alias namespaces, limit 8, hits kept only if metadata is in the alias set, labelled "Matching memories"). GET /api/memories adds totals {active, superseded}.
 - 4D.2 security fix: PATCH /api/memories/[id] -> src/server/corrections.ts correctMemory(). Ownership = getMemoryForUsers(getAliasUserIds(session user)), new fact saved to canonical namespace, markSuperseded under the old row's real owner id (merged blobs now drop out of recall), per-blob lock claimCorrectionLock on inbound_events provider 'memory-correction' (failed or >5 min stale reclaimable, no migration), failed write -> 502 with old memory active, 6/min rate limit. tests/memory-correction.test.ts (real Neon, fake saveFact): canonical, merged, unauthorized incl. merged-id-as-caller, failed write + retry, concurrent conflict.
 - 4D.2 live check: search returned real stored text; 1 Mainnet correction write y7ZvRr..4h_U -> VfuxUL..R-0I, UI showed pending then new blob, counts 1 active / 1 replaced, Replaced filter shows "Replaced by"; chat recall afterwards used only VfuxUL. A second session got empty list/search, 403 without consent, 404 patching the other user's blob. No overflow at 360/390/768/1280; keyboard filters with focus ring; empty state; offline settings failure keeps state.
@@ -60,6 +62,7 @@
 - Owner: reverse-direction recall check (iMessage to Telegram) and 3x10 tester evidence. Consolidation on both channels is done.
 
 ## Verification
+- 4D.3: 39 tests passed, 4 skipped (8 files), typecheck/lint/build pass, git diff --check clean.
 - 4D.2: 30 tests passed, 4 skipped (7 files), typecheck/lint/build pass, git diff --check clean.
 - 4D.1: 25 tests passed, 4 skipped (6 files), typecheck/lint/build pass, git diff --check clean.
 - 13 tests passed (incl. real-Neon merge state machine). typecheck/lint/build pass. git diff --check clean. Migration 003_merge applied.
@@ -71,5 +74,5 @@
 - No orb video supplied: orb is CSS art. Production orb loop still missing.
 
 ## Next action
-- 4D.3 /profile + /settings. Owner: reverse-direction recall check and 3x10 evidence still pending. Wanted assets: higher-res ribbon (>=2400px, transparent), production orb loop.
+- 4D.4 integrated QA. Owner: a real Telegram link from /profile (send code to the bot, MERGE YES, Check status) has not been run yet. Owner: reverse-direction recall check and 3x10 evidence still pending. Wanted assets: higher-res ribbon (>=2400px, transparent), production orb loop.
 - Dev gotcha: Next allows one `next dev` per repo dir. A long-running dev server keeps a stale cached env (getEnv) across hotfixes: it sent no DeepSeek `thinking.type` and got 422. For live checks use `next build && next start -p <port>`, or restart dev.

@@ -366,7 +366,7 @@ export function Chat() {
             Let Anghkooey remember what matters?
           </h2>
           <ul className="chat-consent-list">
-            <li>Preferences and experiences you share can be saved as private memories on Walrus Mainnet.</li>
+            <li>Preferences and experiences you share can be saved as memories on Walrus Mainnet, encrypted by the MemWal relayer.</li>
             <li>Later answers can use them, and each reply shows which memories it used.</li>
             <li>Turning memory off stops new saves. It doesn&rsquo;t erase memories already stored on Walrus.</li>
           </ul>

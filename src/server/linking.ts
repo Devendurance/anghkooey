@@ -48,6 +48,50 @@ export async function getCanonicalUserId(userId: string): Promise<string> {
   return rows.length ? (rows[0].canonical_user_id as string) : userId;
 }
 
+export type ChannelStatus = {
+  provider: MergeChannel;
+  linked: boolean;
+  verified: boolean;
+  verifiedAt: string | null;
+  /** A verified sender used this account's code and must reply MERGE YES or MERGE NO in that channel. */
+  approvalExpiresAt: string | null;
+};
+
+/**
+ * Linked-channel status for the session's canonical identity. Minimal by
+ * design: never returns sender ids, handles, phone numbers or other users' rows.
+ */
+export async function getChannelStatus(sessionUserId: string): Promise<{
+  channels: ChannelStatus[];
+  consolidatedAccounts: number;
+}> {
+  const sql = getSql();
+  const canonical = await getCanonicalUserId(sessionUserId);
+  const aliases = await getAliasUserIds(canonical);
+  const [linked, pending] = await Promise.all([
+    sql`select provider, bool_or(verified_at is not null) as verified, max(verified_at) as verified_at
+        from channel_identities
+        where user_id = any(${aliases}) and provider in ('telegram', 'imessage')
+        group by provider`,
+    sql`select provider, max(expires_at) as expires_at from merge_requests
+        where web_user_id = ${canonical} and used_at is null and expires_at > now()
+        group by provider`,
+  ]);
+  const iso = (v: unknown) => (v ? new Date(v as string).toISOString() : null);
+  const channels = (["telegram", "imessage"] as const).map((provider) => {
+    const l = linked.find((r) => r.provider === provider);
+    const p = pending.find((r) => r.provider === provider);
+    return {
+      provider,
+      linked: Boolean(l),
+      verified: l?.verified === true,
+      verifiedAt: iso(l?.verified_at),
+      approvalExpiresAt: l ? null : iso(p?.expires_at),
+    };
+  });
+  return { channels, consolidatedAccounts: aliases.length - 1 };
+}
+
 async function countActive(userId: string): Promise<number> {
   const sql = getSql();
   const rows = await sql`select count(*)::int as n from memory_metadata where user_id = ${userId} and state = 'active'`;
