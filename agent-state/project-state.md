@@ -2,5 +2,6 @@
 - App: Next 16.4, DeepSeek Flash, MemWal/Walrus Mainnet, Neon account state, persistent Photon worker.
 - Live: https://anghkooey.vercel.app. Repo: github.com/Devendurance/anghkooey.
 - Film source: videos/anghkooey-demo. Eight chapters total 175s, 1920x1080/60fps, ElevenLabs VO, Satoshi/Cormorant, original music, genuine evidence.
-- Film composition validated. Final MP4 is pending recovery after HyperFrames AAC-validation failure. See left-off.md for exact recovery command/state.
+- Final MP4 completed and verified: `videos/anghkooey-demo/anghkooey-demo-FINAL-1080p60.mp4`. Full AV decode passes. Audio -16.0 LUFS, true peak -1.5 dBFS. Independent final-audio ASR matches 331 words with 0.3% normalized word error. No human headphone audition.
+- Recovered 6,767 saved frames, captured only 3,733 missing frames through pinned CLI snapshot helpers, then applied corrected captions and explicit JPEG colour-range conversion. HyperFrames check and all three timing tests pass.
 - No application source or database schema was changed for the film.

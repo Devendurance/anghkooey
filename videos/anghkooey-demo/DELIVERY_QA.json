@@ -1,0 +1,43 @@
+{
+  "file": "anghkooey-demo-FINAL-1080p60.mp4",
+  "sha256": "b8c7b657551ba5d1f72407b197df2a760f64c67409491ed2c58a80c1336f4b6e",
+  "bytes": 42090794,
+  "durationSeconds": 175,
+  "width": 1920,
+  "height": 1080,
+  "fps": 60,
+  "frames": 10500,
+  "videoCodec": "h264",
+  "audioCodec": "aac",
+  "fullAvDecodeExit": 0,
+  "integratedLufs": -16,
+  "truePeakDbfs": -1.5,
+  "captionTests": {
+    "passed": 3,
+    "failed": 0
+  },
+  "compositionCheck": {
+    "ok": true,
+    "errors": 0,
+    "warnings": 0
+  },
+  "independentFinalAudioReview": {
+    "mode": "actual final encoded audio, independent ElevenLabs Scribe transcription",
+    "humanAudition": false,
+    "wordErrorRate": 0.0030211480362537764,
+    "expectedWords": 331,
+    "recognizedWords": 331,
+    "language": "eng",
+    "confidence": 1,
+    "passes": true
+  },
+  "finalAacMatchesTranscribedAac": true,
+  "visualReview": "22 final encoded samples across all chapters and full-resolution recall proof",
+  "humanHeadphoneAudition": false,
+  "evidenceLimits": [
+    "Different earlier and later queries, no controlled identical-query test.",
+    "iMessage recalls quiet hotels and natural lighting, not busy-road/sleep preferences.",
+    "iMessage cannot confirm the original channel.",
+    "Current Web save/recall failed. Genuine earlier local receipts and correction evidence are separately labelled."
+  ]
+}

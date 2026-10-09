@@ -97,6 +97,7 @@
 - Supplied iMessage before/after questions differ. Only quiet hotels and natural light are visibly recalled. Never imply an empty account, controlled identical-query test, or linked-Web recall success.
 - Initialize `window.__timelines` before registering a HyperFrames root. Clamp caption end holds before the next phrase to avoid overlapping captions.
 - Keep failed-render frames until a verified final MP4 exists. Recover captures before starting another full render.
+- JPEG captures use full-range colour. Explicitly convert to limited range before FFmpeg drawbox/ASS filters, then flag limited range, or the Night caption rail turns grey.
 
 <!-- BEGIN:nextjs-agent-rules -->
 

@@ -5,5 +5,7 @@
 - Privacy: fixed masks miss scrolling codes. Use verified pre-code Web range 34-38, never profile-code.mp4. Private originals/capture are ignored.
 - Always initialize window.__timelines before registering main. Do not depend on runtime bootstrap ordering.
 - Caption end holds must clamp before the next phrase. All 59 phrases fit a single 46px Satoshi line, measured max 1334px.
-- Final delivery can re-encode native recovered frames, replacing only y930-1080 caption rail. Proof remains above that rail.
+- Final delivery re-encodes native recovered frames, replacing only y930-1080 caption rail. Proof remains above that rail.
+- Full-range JPEG needs explicit `scale=in_range=full:out_range=limited` before drawbox/ASS plus `setparams=range=limited`. Changing pixel format alone doesn't fix the grey rail.
+- Recover with HyperFrames 0.8.143 CLI snapshot helpers. The producer's bare createFileServer/capture initialization lacked player readiness. Don't repeat that failed approach.
 - iMessage recalls quiet/natural light only. Earlier traveller query differs from later own-preference query. Don't imply empty account or sleep/road recall.
