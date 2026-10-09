@@ -9,7 +9,7 @@ import {
 } from "./extract";
 import { recallFacts, saveFact } from "./memwal";
 import { assertUUID } from "./namespace";
-import { buildGroundedMessages, type MemoryHit } from "./prompts";
+import { buildGroundedMessages, type MemoryHit, type RecallStatus } from "./prompts";
 import {
   claimInboundEvent,
   DuplicateDeliveryError,
@@ -48,6 +48,13 @@ export type ChatResult = {
   savedBlobIds: string[];
   traceId: string;
   model: string;
+  /**
+   * Honest recall outcome: "ok" (all namespaces checked), "partial"
+   * (some namespaces failed), "unavailable" (none checked). Zero hits
+   * with "ok" means no relevant match for this query, never an empty
+   * account. Callers must never render failure as "no saved memory".
+   */
+  recallStatus: RecallStatus;
 };
 
 function hash12(v: string): string {
@@ -111,25 +118,43 @@ export async function handleMessage(input: HandleMessageInput): Promise<ChatResu
 
   // 1. Recall relevant Walrus memories for this identity only, fanning out
   // across merged namespaces so consolidated accounts lose nothing.
+  // Zero hits with status "ok" means no relevant match for this query,
+  // never proof of an empty account (generic questions routinely miss
+  // topically stored facts by vector distance). Failures are tracked per
+  // namespace so callers never render a lookup failure as "no memory".
   let memories: MemoryHit[] = [];
+  let recallStatus: RecallStatus = "ok";
   if (hasMemory()) {
     try {
       let idGroup = [canonicalUserId];
+      let aliasComplete = true;
       if (hasDb()) {
         try {
           const { getAliasUserIds } = await import("./linking");
           idGroup = await getAliasUserIds(canonicalUserId);
         } catch {
           idGroup = [canonicalUserId];
+          aliasComplete = false;
         }
       }
-      const per = await Promise.all(
+      const settled = await Promise.all(
         idGroup.map((uid) =>
-          recallFacts({ userId: uid, query: text, limit: 10, maxDistance: 0.7 }).catch(() => [] as MemoryHit[])
+          recallFacts({ userId: uid, query: text, limit: 10, maxDistance: 0.7 }).then(
+            (hits) => ({ ok: true as const, hits }),
+            () => ({ ok: false as const, hits: [] as MemoryHit[] })
+          )
         )
       );
+      const failed = settled.filter((r) => !r.ok).length;
+      if (settled.length > 0 && failed === settled.length) {
+        recallStatus = "unavailable";
+      } else if (failed > 0 || !aliasComplete) {
+        recallStatus = "partial";
+      }
       const seen = new Set<string>();
-      const raw = per.flat().filter((m) => (seen.has(m.blob_id) ? false : (seen.add(m.blob_id), true)));
+      const raw = settled
+        .flatMap((r) => r.hits)
+        .filter((m) => (seen.has(m.blob_id) ? false : (seen.add(m.blob_id), true)));
       if (hasDb()) {
         try {
           const sets = await Promise.all(idGroup.map((uid) => getSupersededIds(uid).catch(() => new Set<string>())));
@@ -143,6 +168,7 @@ export async function handleMessage(input: HandleMessageInput): Promise<ChatResu
       }
     } catch {
       memories = [];
+      recallStatus = "unavailable";
     }
   }
 
@@ -163,7 +189,7 @@ export async function handleMessage(input: HandleMessageInput): Promise<ChatResu
   let answer: string;
   try {
     answer = await chatComplete({
-      messages: buildGroundedMessages({ userText: text, memories, history }),
+      messages: buildGroundedMessages({ userText: text, memories, history, recallStatus }),
       maxTokens: 1000,
     });
   } catch (e) {
@@ -326,11 +352,12 @@ export async function handleMessage(input: HandleMessageInput): Promise<ChatResu
       user_hash: hash12(canonicalUserId),
       model,
       recall_count: memories.length,
+      recall_status: recallStatus,
       blob_ids: receipts.map((r) => r.blobId),
       saves,
       latency_ms: Date.now() - started,
     })
   );
 
-  return { answer, memoryReceipts: receipts, saves, savedBlobIds, traceId, model };
+  return { answer, memoryReceipts: receipts, saves, savedBlobIds, traceId, model, recallStatus };
 }

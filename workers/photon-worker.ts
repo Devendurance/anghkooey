@@ -215,6 +215,11 @@ async function main() {
       });
 
       let out = result.answer.slice(0, 3500);
+      if (result.recallStatus === "unavailable") {
+        out += "\n\n(Memory lookup is unavailable right now, so stored preferences could not be checked. Retry for a full check.)";
+      } else if (result.recallStatus === "partial") {
+        out += "\n\n(Partial memory check: some namespaces were unreachable, so results may be incomplete.)";
+      }
       if (!allowSave) {
         out += "\n\n(Memory is OFF. Say YES any time to let me remember preferences.)";
       } else if (result.saves.completed > 0) {
@@ -231,6 +236,7 @@ async function main() {
           platform,
           sender_hash: hash12(senderId),
           recall_count: result.memoryReceipts.length,
+          recall_status: result.recallStatus,
           saves: result.saves,
           consent: allowSave,
           latency_ms: Date.now() - started,

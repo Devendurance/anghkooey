@@ -1,8 +1,6 @@
 # Current checkpoint
-- Task: official Anghkooey hackathon demo film. Final encoded and verified at `videos/anghkooey-demo/anghkooey-demo-FINAL-1080p60.mp4`.
-- Done: 175 seconds, 1920x1080, 60 fps, H.264/AAC, 10,500 frames. ElevenLabs narration, corrected aligned captions, original score, authentic recorded evidence.
-- Done: full AV decode passes. Audio -16.0 LUFS, true peak -1.5 dBFS. Independent final-audio ASR matches 331 words with 0.3% normalized word error. No human headphone audition.
-- Done: composition check has zero errors/warnings. Three timing/caption tests pass. Muted sampled-frame review and full-resolution recall proof inspected. Source checkpoint `7b61eb8` and delivery/QA checkpoint `13d97c3` pushed.
-- Recovery: native render failed AAC validation. Retained 6,767 JPEGs, recaptured only 3,733 with the pinned CLI's native snapshot helpers, then encoded with corrected captions. Temporary recovery frames and failed-render work directory are cleaned. Final MP4 and review artifacts remain.
-- Next: user can watch the final MP4. If changes are requested, edit generators and rebuild. Keep final binary local, editable assets and QA in Git.
-- Evidence limits: earlier/later questions differ. iMessage recalls quiet hotels and natural light, not busy-road/sleep preferences, and can't confirm source channel. Current Web save failed. Separately labelled earlier Web receipts/corrections are genuine.
+- Task: Anghkooey production memory recall diagnostic + honest-recall fix.
+- Done: read-only Neon/Walrus diagnostic confirmed known blob Q9aePj..85jo (stay.lighting_preference, active) in owner f7de72cc, family of 4 under canonical a1d73601 with Telegram + iMessage linked. Topical recall succeeds at distance 0.38-0.55 in owner namespace; generic meta queries miss at 0.81-0.86 by vector distance, not by failure. Walrus lookups succeeded, not failed. Threshold gap confirmed at boundary (hotel 0.707, light 0.719 miss 0.7 but hit 0.8).
+- Done: fix tracks recallStatus ok/partial/unavailable per namespace, honest prompts, /api/chat memoryStatus, Web distinct retriable UI, Photon notices, regression tests with mocks. Tests 61 passed, typecheck/lint-focused/build pass. No Mainnet writes, no identity merges, no cross-account fallback.
+- Next: commit and push focused fix, report AWS worker update commands for anghkooey-photon under /opt/anghkooey. Untested owner actions: real browser session-token recall flow, Telegram owner reply via Photon.
+- Evidence limits: 20-user channel:evidence is bounded, not a full inventory. Walrus dashboard zero is pre-July-30 migration scope, not new memories. Never claim empty account from zero semantic hits.

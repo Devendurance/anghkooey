@@ -8,6 +8,7 @@ import { CONVERSATION_KEY_PREFIX } from "@/lib/site";
 
 type Receipt = { blobId: string; reason: string };
 type SaveStatus = "confirmed" | "failed" | "none";
+type MemoryStatus = "ok" | "partial" | "unavailable";
 
 type Msg = {
   id: string;
@@ -21,6 +22,7 @@ type Msg = {
   saveStatus?: SaveStatus;
   savedBlobIds?: string[];
   memoryOn?: boolean;
+  memoryStatus?: MemoryStatus;
 };
 
 type Session = { userId: string; expiresAt: string; consent: boolean };
@@ -226,6 +228,7 @@ export function Chat() {
               saveStatus: (r.body.saveStatus as SaveStatus | undefined) ?? "none",
               savedBlobIds: (r.body.savedBlobIds as string[] | undefined) ?? [],
               memoryOn,
+              memoryStatus: (r.body.memoryStatus as MemoryStatus | undefined) ?? "ok",
             },
           ]);
           setSession((s) => (s ? { ...s, consent: memoryOn } : s));
@@ -506,8 +509,19 @@ export function Chat() {
 
 function Receipts({ m }: { m: Msg }) {
   const receipts = m.receipts ?? [];
+  const memoryStatus = m.memoryStatus ?? "ok";
   return (
     <div className="chat-receipts">
+      {memoryStatus === "unavailable" ? (
+        <p className="chat-receipt" data-kind="failed" role="status">
+          Memory lookup unavailable right now. Stored memories were not checked. Retry for a full check.
+        </p>
+      ) : null}
+      {memoryStatus === "partial" ? (
+        <p className="chat-receipt" data-kind="failed" role="status">
+          Partial memory check. Some namespaces could not be reached, so results may be incomplete. Retry for full coverage.
+        </p>
+      ) : null}
       {receipts.length > 0 ? (
         <details className="chat-receipt" data-kind="recall">
           <summary>
@@ -528,11 +542,11 @@ function Receipts({ m }: { m: Msg }) {
             })}
           </ul>
         </details>
-      ) : (
+      ) : memoryStatus === "ok" ? (
         <p className="chat-receipt" data-kind="none">
-          No saved memory matched
+          No relevant memory matched this query
         </p>
-      )}
+      ) : null}
       {m.saveStatus === "confirmed" ? (
         <p className="chat-receipt" data-kind="saved">
           Saved to Walrus Mainnet

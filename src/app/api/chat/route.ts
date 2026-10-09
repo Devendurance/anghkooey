@@ -54,6 +54,7 @@ export async function POST(req: Request) {
       sessionId: auth.session.sessionId,
       conversationId: convId,
       memoryReceipts: result.memoryReceipts,
+      memoryStatus: result.recallStatus,
       saves: result.saves,
       savedBlobIds: result.savedBlobIds,
       saveStatus:
