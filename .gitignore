@@ -41,7 +41,8 @@ yarn-error.log*
 .playwright-mcp/
 logs/
 *.log
-.fast-build/
+.fast-build/*
+!.fast-build/STATE.md
 
 # typescript
 *.tsbuildinfo
