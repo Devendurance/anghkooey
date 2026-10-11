@@ -84,6 +84,7 @@
 - Web app nav comes from `APP_NAV` in `src/lib/site.ts`. Add a route only when its page exists.
 - Components with event handlers (e.g. `FoldedA` onError) need `"use client"` to be usable from server components like `AppShell`.
 - Only one `next dev` can run per repo dir. A long-running dev server keeps a stale cached env after server hotfixes. For live API checks use `next build && next start -p <port>`. Killing the exec shell doesn't stop `next start`, so stop the PID on that port.
+- Frontend workflow, design rules, privacy copy and past mistakes live in `docs/FRONTEND-PLAYBOOK.md`. Read it with `DESIGN.md` before any UI work.
 - `cacheComponents` is on: no `new Date()` in prerendered components (use constants). This includes `useState(() => Date.now())` in client components.
 - Next keeps visited routes mounted (hidden) and re-runs their effects when shown. App pages must reset per-session UI state at the start of their load function.
 - App pages scroll inside `.mem`, so it must stay `position: relative` or `sr-only` spans stretch the document.
