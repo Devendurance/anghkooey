@@ -1,5 +1,5 @@
 # Current checkpoint
-- Task: Slice Gmail-A backend complete (OAuth authorize/callback, encrypted storage, status/disconnect). No UI page yet.
-- Done: migration 004, gmail.ts, 4 routes, env additions, 10 unit tests pass + 2 DB tests skip (no DATABASE_URL in sandbox). Typecheck, eslint, build pass. Commit pending, then push.
-- Next: Gmail settings UI slice, then owner Google credentials (GOOGLE_CLIENT_ID/SECRET, GMAIL_TOKEN_KEY) and live connect test. Untested: real Google OAuth, DB boundary tests in this sandbox.
-- Evidence limits: stubbed fetch only, no live Google calls. No email sent. Tokens never leave the server.
+- Task: Slice Gmail-B UI complete: settings section plus public privacy page.
+- Done: gmail-ui helpers, Connected Gmail section with all states, /privacy page with actual-behavior copy, footer and settings links. 12 UI tests pass. Typecheck, eslint, build pass with /privacy prerendered. Commit pending, then push.
+- Next: owner Google credentials plus migration 004, then live browser connect test from /settings. Untested: real Google consent, DB boundary tests in sandbox.
+- Evidence limits: stubbed fetch and static copy checks only. No live Google calls, no email sent.

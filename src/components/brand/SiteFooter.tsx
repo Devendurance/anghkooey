@@ -82,6 +82,11 @@ export function SiteFooter() {
               <h2 className="lp-footer-h">Resources</h2>
               <ul className="mt-3">
                 <li>
+                  <Link href="/privacy" className={linkCls}>
+                    Privacy Policy
+                  </Link>
+                </li>
+                <li>
                   <a href={REPO_URL} target="_blank" rel="noopener noreferrer" className={linkCls}>
                     Source on GitHub
                     <ArrowUpRight aria-hidden className="size-3.5" strokeWidth={1.5} />

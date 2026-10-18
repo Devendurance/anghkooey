@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { ArrowRight, RotateCw } from "lucide-react";
 import { call, errorMessage } from "@/lib/app-client";
+import { GMAIL_SCOPES_NOTE, gmailReturnState, isGmailConnected, type GmailStatus } from "@/lib/gmail-ui";
 import { CONVERSATION_KEY_PREFIX } from "@/lib/site";
 
 const dateFmt = (iso: string) =>
@@ -28,6 +29,11 @@ export function Settings() {
   const [busy, setBusy] = useState<"consent" | "end" | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [gmail, setGmail] = useState<GmailStatus | null>(null);
+  const [gmailReady, setGmailReady] = useState(false);
+  const [gmailBusy, setGmailBusy] = useState<"connect" | "disconnect" | null>(null);
+  const [gmailError, setGmailError] = useState<string | null>(null);
+  const [confirmDisconnectGmail, setConfirmDisconnectGmail] = useState(false);
 
   const load = useCallback(async () => {
     setPhase("loading");
@@ -41,6 +47,20 @@ export function Settings() {
     setExpiresAt(s.body.expiresAt as string);
     setConsentAt((st.body.consentAt as string | null) ?? null);
     setPhase("ready");
+    const g = await call("/api/gmail/status").catch(() => null);
+    if (g?.ok) setGmail(g.body as unknown as GmailStatus);
+    setGmailReady(true);
+    setConfirmDisconnectGmail(false);
+    try {
+      const ret = gmailReturnState(window.location.search);
+      if (ret) {
+        if ("notice" in ret) setNotice(ret.notice);
+        else setGmailError(ret.error);
+        window.history.replaceState(null, "", window.location.pathname);
+      }
+    } catch {
+      // Location API unavailable. OAuth return notices are skipped.
+    }
   }, []);
 
   useEffect(() => {
@@ -81,6 +101,33 @@ export function Settings() {
     forgetLocalConversations();
     setConfirmEnd(false);
     setPhase("ended");
+  };
+
+  const connectGmail = async () => {
+    setGmailBusy("connect");
+    setGmailError(null);
+    const r = await call("/api/gmail/auth-url", { method: "POST" }).catch(() => null);
+    if (!r?.ok) {
+      setGmailBusy(null);
+      if (r?.status === 401) return setPhase("ended");
+      if (r?.status === 503) return setGmailError("Gmail connection isn't set up yet. Try again later.");
+      return setGmailError("Gmail couldn't be connected just now. Try again.");
+    }
+    window.location.assign(r.body.url as string);
+  };
+
+  const disconnectGmail = async () => {
+    setGmailBusy("disconnect");
+    setGmailError(null);
+    const r = await call("/api/gmail/disconnect", { method: "POST" }).catch(() => null);
+    setGmailBusy(null);
+    if (!r?.ok) {
+      if (r?.status === 401) return setPhase("ended");
+      return setGmailError("Gmail couldn't be disconnected just now. Try again.");
+    }
+    setGmail({ connected: false, email: null, connectedAt: null });
+    setConfirmDisconnectGmail(false);
+    setNotice("Gmail disconnected. Anghkooey no longer holds a mailbox for this identity.");
   };
 
   return (
@@ -189,6 +236,100 @@ export function Settings() {
               ) : null}
             </section>
 
+            <section aria-labelledby="gmail-title" className="mem-search acct-link">
+              <div className="acct-row">
+                <div className="acct-row-text">
+                  <h2 id="gmail-title" className="mem-h2">
+                    Connected Gmail
+                  </h2>
+                  {!gmailReady ? (
+                    <p className="mem-text" role="status">
+                      Checking Gmail connection…
+                    </p>
+                  ) : isGmailConnected(gmail) ? (
+                    <>
+                      <p className="mem-text">
+                        Connected as {gmail.email}
+                        {gmail.connectedAt ? ` since ${dateFmt(gmail.connectedAt)}` : ""}.
+                      </p>
+                      <p className="mem-text">
+                        Sending isn&rsquo;t enabled yet. Nothing is sent automatically, and no email goes out without
+                        your explicit approval. <Link href="/privacy" className="acct-inline">Privacy Policy</Link>
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <p className="mem-text">
+                        Not connected. A future update will let Anghkooey send hotel inquiries you approve, using
+                        your own Gmail address.
+                      </p>
+                      <p className="mem-text">
+                        {GMAIL_SCOPES_NOTE} You can disconnect anytime.{" "}
+                        <Link href="/privacy" className="acct-inline">Privacy Policy</Link>
+                      </p>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              {gmailError ? (
+                <p className="mem-error" role="alert">
+                  {gmailError}
+                </p>
+              ) : null}
+
+              {gmailReady && !isGmailConnected(gmail) ? (
+                <div>
+                  <button
+                    type="button"
+                    className="app-btn app-btn-glass"
+                    disabled={gmailBusy !== null}
+                    onClick={() => void connectGmail()}
+                  >
+                    {gmailBusy === "connect" ? "Opening Google…" : "Connect Gmail"}
+                  </button>
+                </div>
+              ) : null}
+
+              {gmailReady && isGmailConnected(gmail) && !confirmDisconnectGmail ? (
+                <div>
+                  <button
+                    type="button"
+                    className="app-btn app-btn-glass"
+                    disabled={gmailBusy !== null}
+                    onClick={() => setConfirmDisconnectGmail(true)}
+                  >
+                    Disconnect Gmail
+                  </button>
+                </div>
+              ) : null}
+
+              {gmailReady && isGmailConnected(gmail) && confirmDisconnectGmail ? (
+                <div className="mem-fix" role="group" aria-labelledby="gmail-end-title">
+                  <p id="gmail-end-title" className="mem-h3">
+                    Disconnect Gmail?
+                  </p>
+                  <p className="mem-help">
+                    This removes the stored mailbox for this identity and asks Google to revoke access. Your
+                    memories are unaffected.
+                  </p>
+                  <div className="flex flex-wrap gap-3">
+                    <button
+                      type="button"
+                      className="app-btn app-btn-primary"
+                      disabled={gmailBusy !== null}
+                      onClick={() => void disconnectGmail()}
+                    >
+                      {gmailBusy === "disconnect" ? "Disconnecting…" : "Disconnect Gmail"}
+                    </button>
+                    <button type="button" className="app-btn app-btn-quiet" onClick={() => setConfirmDisconnectGmail(false)}>
+                      Keep connected
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+            </section>
+
             <section aria-labelledby="storage-title" className="acct-section">
               <h2 id="storage-title" className="mem-h2">
                 How memory is stored
@@ -267,7 +408,7 @@ export function Settings() {
             </section>
 
             <p className="mem-foot">
-              <Link href="/profile">Profile</Link> · <Link href="/chat">Back to chat</Link>
+              <Link href="/profile">Profile</Link> · <Link href="/privacy">Privacy</Link> · <Link href="/chat">Back to chat</Link>
             </p>
           </>
         )}
