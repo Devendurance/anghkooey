@@ -1,5 +1,5 @@
 # Current checkpoint
-- Task: Live QA hotfix complete for stale search dates, placeholder inquiry, and long replies.
-- Done: sequential date refinement (checkout-only, checkin-only, full replacement, ambiguous keep), nights-driven checkout, canonical stay shared by search/prompt/itinerary/inquiry, exact-value inquiry rule, concise revision mode, sanitized hotel status logging. Regression tests reproduce the Nov 12-16 to Nov 12-17 two-message thread. No live requests, no key, no new provider.
-- Next: owner pulls on AWS, restarts worker, reruns the dated two-message test and checks hotel_status in logs. No second local worker.
-- Evidence limits: mocked SerpApi only. Test A missing listings cause still undetermined from available evidence; new hotel_status log will identify it live. Inquiry exactness depends on the model following the strengthened prompt.
+- Task: Slice Gmail-A backend complete (OAuth authorize/callback, encrypted storage, status/disconnect). No UI page yet.
+- Done: migration 004, gmail.ts, 4 routes, env additions, 10 unit tests pass + 2 DB tests skip (no DATABASE_URL in sandbox). Typecheck, eslint, build pass. Commit pending, then push.
+- Next: Gmail settings UI slice, then owner Google credentials (GOOGLE_CLIENT_ID/SECRET, GMAIL_TOKEN_KEY) and live connect test. Untested: real Google OAuth, DB boundary tests in this sandbox.
+- Evidence limits: stubbed fetch only, no live Google calls. No email sent. Tokens never leave the server.

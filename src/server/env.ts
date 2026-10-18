@@ -20,6 +20,9 @@ const envSchema = z.object({
     .default("https://relayer.memory.walrus.xyz"),
   APP_SESSION_SECRET: z.string().min(16).optional(),
   WEB_BASE_URL: z.string().url().optional(),
+  GOOGLE_CLIENT_ID: z.string().min(1).optional(),
+  GOOGLE_CLIENT_SECRET: z.string().min(1).optional(),
+  GMAIL_TOKEN_KEY: z.string().optional(),
   PHOTON_PROJECT_ID: z.string().optional(),
   PHOTON_PROJECT_SECRET: z.string().optional(),
   TELEGRAM_BOT_TOKEN: z.string().optional(),
@@ -59,6 +62,9 @@ export function envDiagnostics(): Record<string, "present" | "missing"> {
     "TELEGRAM_BOT_TOKEN",
     "APP_SESSION_SECRET",
     "WEB_BASE_URL",
+    "GOOGLE_CLIENT_ID",
+    "GOOGLE_CLIENT_SECRET",
+    "GMAIL_TOKEN_KEY",
   ] as const;
   const out: Record<string, "present" | "missing"> = {};
   for (const k of keys) out[k] = process.env[k] ? "present" : "missing";
