@@ -16,6 +16,7 @@ import {
   extractTripParams,
   isTripFollowUp,
 } from "./trip-brief";
+import { parseNightlyBudget, resolveHotelDates, searchHotels, type HotelSearchResult } from "./hotels";
 import {
   claimInboundEvent,
   DuplicateDeliveryError,
@@ -231,6 +232,29 @@ export async function handleMessage(input: HandleMessageInput): Promise<ChatResu
   const tripParams = tripMode
     ? extractTripParams([...history.filter((h) => h.role === "user").map((h) => h.text), text])
     : null;
+  // One hotel provider only (SerpApi). Best-effort: any failure degrades
+  // to the P0 brief and never blocks or fabricates the answer.
+  let hotels: HotelSearchResult | null = null;
+  if (tripMode && tripParams?.destination) {
+    try {
+      const userTexts = [...history.filter((h) => h.role === "user").map((h) => h.text), text];
+      const dates = resolveHotelDates(userTexts);
+      if (dates) {
+        hotels = await searchHotels({
+          destination: tripParams.destination,
+          checkIn: dates.checkIn,
+          checkOut: dates.checkOut,
+          adults: 2,
+          maxNightlyBudget: parseNightlyBudget(tripParams.budget),
+          currency: "USD",
+        });
+      } else {
+        hotels = { status: "missing_dates", candidates: [], observedAt: new Date().toISOString() };
+      }
+    } catch {
+      hotels = { status: "provider_unavailable", candidates: [], observedAt: new Date().toISOString() };
+    }
+  }
   let answer: string;
   try {
     answer =
@@ -242,6 +266,7 @@ export async function handleMessage(input: HandleMessageInput): Promise<ChatResu
               history,
               recallStatus,
               params: tripParams,
+              hotels,
             }),
             maxTokens: 1000,
           })

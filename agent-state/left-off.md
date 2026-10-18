@@ -1,5 +1,5 @@
 # Current checkpoint
-- Task: Trip Brief slice for Photon Muse hackathon complete and pushed.
-- Done: deterministic trip router + grounded brief prompt (src/server/trip-brief.ts), orchestrator trip path reusing recall/history/idempotency plus durable-only save gate, 17 mocked regression tests covering A-H with no Mainnet writes. Focused 17/17 pass, mocked suites 43 passed 4 skipped, typecheck/lint-clean/build pass. Commit 5813428 pushed to origin/main.
-- Next: owner runs 5-message REAL iMessage test on AWS (pull + restart, no env changes), then verifies recall receipt and follow-up refinement. Untested: production iMessage recall with real Walrus memories, real-Neon suite in sandbox times out (environmental, pre-existing).
-- Evidence limits: mocked briefs prove routing and prompt honesty, not live availability. Never claim empty account from zero hits. Trip plans stay conversational, only durable preferences persist.
+- Task: Slice B hotel search complete, SerpApi-only adapter wired into Trip Brief.
+- Done: src/server/hotels.ts (date resolver, budget parse, validation, timeout, sanitize, cap 3, distinct statuses, no key logged), trip-brief prompt hotel evidence block, orchestrator best-effort wiring with P0 fallback. No live SerpApi call: no SERPAPI_API_KEY in repo or env. tests/hotel-search.test.ts 12 tests mocked, no network or Mainnet writes. Trip+hotel 29/29 pass, mocked suites 79 passed 4 skipped, typecheck/eslint/build pass.
+- Next: owner adds SERPAPI_API_KEY on AWS only, pulls, restarts, runs dated iMessage test. Do not start a second local worker. Untested: live SerpApi response, production dated brief with real candidates.
+- Evidence limits: mocked payloads prove mapping and honesty, not live inventory. Vague timing never invents dates. Trip plans stay conversational.
