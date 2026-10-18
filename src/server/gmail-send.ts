@@ -10,7 +10,7 @@ import type { FetchFn } from "./gmail";
 import { getAliasUserIds } from "./linking";
 import { filterSuperseded, getRecentMessages, getSupersededIds } from "./repo";
 import { recallFacts } from "./memwal";
-import { extractTripParams, type TripParams } from "./trip-brief";
+import { extractTripParams, parsePartySize, resolveEffectiveStay, type TripParams } from "./trip-brief";
 import type { MemoryHit } from "./prompts";
 
 const GMAIL_SEND_URL = "https://gmail.googleapis.com/gmail/v1/users/me/messages/send";
@@ -125,22 +125,24 @@ export function buildInquirySubject(params: TripParams): string | null {
 export type InquiryBodyInput = {
   params: TripParams;
   memories: MemoryHit[];
-  adults?: number;
+  /** Explicit party size. Null means unstated and must never be invented. */
+  partySize: number | null;
 };
 
 /** Deterministic inquiry body from trip facts + recalled preferences. No LLM. */
 export function buildInquiryBody(input: InquiryBodyInput): string | null {
-  const { params, memories } = input;
+  const { params, memories, partySize } = input;
   if (!params.destination) return null;
   const dates = params.timing ?? null;
   if (!dates) return null;
   const nights = params.nights !== null ? `${params.nights} night${params.nights === 1 ? "" : "s"}` : null;
-  const adults = input.adults ?? 2;
+  const party =
+    partySize !== null && partySize >= 1 ? ` for ${partySize} adult${partySize === 1 ? "" : "s"}` : "";
   const budget = params.budget;
   const lines = [
     "Hello,",
     "",
-    `I am planning a stay in ${params.destination} from ${dates}${nights ? ` (${nights})` : ""} for ${adults} adult${adults === 1 ? "" : "s"}${budget ? `, with a nightly budget of ${budget}` : ""}.`,
+    `I am planning a stay in ${params.destination} from ${dates}${nights ? ` (${nights})` : ""}${party}${budget ? `, with a nightly budget of ${budget}` : ""}.`,
     "",
   ];
   const prefs = memories.slice(0, 3).map((m) => {
@@ -168,6 +170,8 @@ export type DraftPreview = {
   code: string;
   expiresAt: string;
   preferences: string[];
+  /** Explicit party size, or null when the user never stated it. */
+  partySize: number | null;
 };
 
 /** Short-lived pending draft for one identity. Supersedes older pendings. */
@@ -191,11 +195,16 @@ export async function prepareDraft(args: {
   } catch {
     history = [];
   }
-  const params = extractTripParams(history.filter((h) => h.role === "user").map((h) => h.text));
+  const userTexts = history.filter((h) => h.role === "user").map((h) => h.text);
+  // One canonical stay, identical to the Trip Brief path: sequential date
+  // refinement plus latest-nights checkout recompute. Never stale.
+  const stay = resolveEffectiveStay(userTexts, userTexts[userTexts.length - 1] ?? "");
+  const params = extractTripParams(userTexts);
+  const partySize = parsePartySize(userTexts);
   const missing: string[] = [];
   if (!params.destination) missing.push("destination");
-  if (!params.timing) missing.push("exact check-in and check-out dates");
-  if (missing.length > 0) return { status: "need_info", missing };
+  if (!stay) missing.push("exact check-in and check-out dates");
+  if (missing.length > 0 || !stay) return { status: "need_info", missing };
 
   let memories: MemoryHit[] = [];
   try {
@@ -218,8 +227,13 @@ export async function prepareDraft(args: {
     memories = [];
   }
 
-  const subject = buildInquirySubject(params);
-  const body = buildInquiryBody({ params, memories });
+  const effectiveParams: TripParams = {
+    ...params,
+    timing: `${stay.checkIn} to ${stay.checkOut}`,
+    nights: stay.nights ?? params.nights,
+  };
+  const subject = buildInquirySubject(effectiveParams);
+  const body = buildInquiryBody({ params: effectiveParams, memories, partySize });
   if (!subject || !body) return { status: "need_info", missing: ["exact check-in and check-out dates"] };
 
   const code = newApprovalCode();
@@ -248,6 +262,7 @@ export async function prepareDraft(args: {
       code,
       expiresAt: (rows[0].expires_at as Date).toISOString(),
       preferences: memories.slice(0, 3).map((m) => m.text.match(/FACT:\s*([^\n]*)/)?.[1]?.trim() || m.text.slice(0, 140)),
+      partySize,
     },
   };
 }
@@ -273,6 +288,7 @@ export async function getPendingDraft(
     code: "",
     expiresAt: new Date(r.expires_at as string).toISOString(),
     preferences: [],
+    partySize: null,
     expired,
   };
 }
@@ -286,6 +302,10 @@ export function formatPreviewMessage(p: Omit<DraftPreview, "code"> & { code: str
   const approvalLine = p.code
     ? `Reply SEND ${p.code} to approve this exact email. Expires ${p.expiresAt}.`
     : `Reply SEND with the code from the original preview to approve this exact email. Expires ${p.expiresAt}.`;
+  const partyLine =
+    p.partySize !== null && p.partySize !== undefined
+      ? ""
+      : "\nNote: traveler count not stated — reply with the party size and I will add it before you approve.";
   return [
     "Email preview — NOT SENT.",
     `From: ${p.senderEmail}`,
@@ -296,6 +316,7 @@ export function formatPreviewMessage(p: Omit<DraftPreview, "code"> & { code: str
     "",
     prefLine,
     approvalLine,
+    ...(partyLine ? [partyLine] : []),
   ].join("\n");
 }
 
@@ -350,6 +371,8 @@ export async function approveAndSend(args: {
   canonicalUserId: string;
   code: string;
   fetchFn?: FetchFn;
+  /** Test seam for the receipt write. Production default persists to Neon. */
+  persistReceipt?: (draftId: string, messageId: string, threadId: string | null) => Promise<void>;
 }): Promise<SendOutcome> {
   const sql = getSql();
   const fetchFn: FetchFn = args.fetchFn ?? fetch;
@@ -452,10 +475,20 @@ export async function approveAndSend(args: {
   }
   if (typeof data.id !== "string" || !data.id) return unknown("bad_response");
   const threadId = typeof data.threadId === "string" ? data.threadId : null;
-  await sql`
-    update gmail_drafts set status = 'sent', gmail_message_id = ${data.id},
-      gmail_thread_id = ${threadId}, sent_at = now(), updated_at = now()
-    where id = ${draftId}`;
+  // Gmail accepted the message. If THIS write fails the provider may still
+  // have it, so it must surface as uncertain, never as unsent.
+  try {
+    if (args.persistReceipt) {
+      await args.persistReceipt(draftId, data.id, threadId);
+    } else {
+      await sql`
+        update gmail_drafts set status = 'sent', gmail_message_id = ${data.id},
+          gmail_thread_id = ${threadId}, sent_at = now(), updated_at = now()
+        where id = ${draftId}`;
+    }
+  } catch {
+    return unknown("receipt_unstored");
+  }
   return { status: "sent", gmailMessageId: data.id };
 }
 

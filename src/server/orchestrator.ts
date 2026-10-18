@@ -15,8 +15,9 @@ import {
   detectTripRequest,
   extractTripParams,
   isTripFollowUp,
+  resolveEffectiveStay,
 } from "./trip-brief";
-import { addNights, nightsBetween, parseNightlyBudget, resolveHotelDates, searchHotels, type HotelSearchResult } from "./hotels";
+import { parseNightlyBudget, searchHotels, type HotelSearchResult } from "./hotels";
 import {
   claimInboundEvent,
   DuplicateDeliveryError,
@@ -252,14 +253,10 @@ export async function handleMessage(input: HandleMessageInput): Promise<ChatResu
   let hotels: HotelSearchResult | null = null;
   if (tripMode && tripParams?.destination) {
     try {
-      let dates = resolveHotelDates(userTexts);
-      const latestNights = extractTripParams([text]).nights;
-      if (dates && latestNights && latestNights !== nightsBetween(dates.checkIn, dates.checkOut)) {
-        const bumped = addNights(dates.checkIn, latestNights);
-        if (bumped && bumped > dates.checkIn) dates = { checkIn: dates.checkIn, checkOut: bumped };
-      }
-      if (dates) {
-        const nights = nightsBetween(dates.checkIn, dates.checkOut) ?? tripParams.nights ?? 2;
+      const stayRange = resolveEffectiveStay(userTexts, text);
+      if (stayRange) {
+        const dates = { checkIn: stayRange.checkIn, checkOut: stayRange.checkOut };
+        const nights = stayRange.nights ?? tripParams.nights ?? 2;
         stay = {
           checkIn: dates.checkIn,
           checkOut: dates.checkOut,

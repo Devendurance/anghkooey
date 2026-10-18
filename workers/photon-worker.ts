@@ -259,9 +259,13 @@ async function main() {
               await message.reply("Gmail needs reconnecting. Open Settings and connect Gmail again.");
             } else if (outcome.status === "failed") {
               await message.reply("Gmail didn't accept it, so nothing was sent. Reply PREVIEW for a fresh draft.");
+            } else if (outcome.status === "unknown" && outcome.errorCode === "receipt_unstored") {
+              await message.reply(
+                "Gmail accepted your email, but I couldn't save the receipt. Check your Gmail Sent folder to confirm, then reply PREVIEW before approving anything again."
+              );
             } else {
               await message.reply(
-                "The send outcome is uncertain, so it was NOT retried. Reply PREVIEW to check before anything is resent."
+                "The send outcome is uncertain — Gmail may already have it — so it was NOT retried. Check your Gmail Sent folder before approving anything again."
               );
             }
             gmailLog("gmail_send", outcome.status);

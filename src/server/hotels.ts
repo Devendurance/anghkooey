@@ -95,7 +95,18 @@ function datesInMessage(t: string, now: Date): string[] {
   for (const m of t.matchAll(/\b(\d{4}-\d{2}-\d{2})\b/g)) {
     if (isValidISO(m[1])) hits.push({ iso: m[1], idx: m.index ?? 0 });
   }
-  for (const m of t.matchAll(new RegExp(MD_RE_SRC, "gi"))) {
+  // Same-month ranges first: "November 12-16". The single-day pattern
+  // below skips day numbers followed by a dash so ranges count once.
+  for (const m of t.matchAll(
+    /\b(january|february|march|april|may|june|july|august|september|october|november|december)\s+(\d{1,2})(?:st|nd|rd|th)?\s*[-–—]\s*(\d{1,2})\b/gi
+  )) {
+    const a = monthDayToISO(m[1], parseInt(m[2], 10), now);
+    const b = monthDayToISO(m[1], parseInt(m[3], 10), now);
+    if (a) hits.push({ iso: a, idx: m.index ?? 0 });
+    if (b) hits.push({ iso: b, idx: (m.index ?? 0) + 1 });
+  }
+  const singleSrc = `${MD_RE_SRC}(?:st|nd|rd|th)?\\b(?!\\s*[-–—])`;
+  for (const m of t.matchAll(new RegExp(singleSrc, "gi"))) {
     const iso = monthDayToISO(m[1], parseInt(m[2], 10), now);
     if (iso) hits.push({ iso, idx: m.index ?? 0 });
   }

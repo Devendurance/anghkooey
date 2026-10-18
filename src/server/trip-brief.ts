@@ -1,5 +1,6 @@
 import type { MemoryHit, RecallStatus } from "./prompts";
 import type { HotelSearchResult } from "./hotels";
+import { addNights, nightsBetween, resolveHotelDates } from "./hotels";
 
 export type TripParams = {
   destination: string | null;
@@ -130,6 +131,53 @@ export function extractTripParams(texts: string[]): TripParams {
   const budgetHits = [...joined.matchAll(new RegExp(BUDGET_RE.source, "gi"))];
   const budget = budgetHits.length > 0 ? budgetHits[budgetHits.length - 1][1].trim().slice(0, 80) : null;
   return { destination, nights, timing, budget };
+}
+
+const PARTY_NUM_RES = [
+  /(\d{1,2})\s*adults?\b/i,
+  /party of (\d{1,2})/i,
+  /family of (\d{1,2})/i,
+  /(\d{1,2})\s*(guests?|travellers?|travelers?|people)\b/i,
+];
+const SOLO_RE = /\b(just me|on my own|travelling alone|traveling alone|by myself|solo)\b/i;
+
+/** Explicit party size, last stated wins. Null when the user never said. Never invented. */
+export function parsePartySize(texts: string[]): number | null {
+  const joined = texts.join("\n").slice(0, 4000);
+  let best: { idx: number; value: number } | null = null;
+  for (const re of PARTY_NUM_RES) {
+    const g = new RegExp(re.source, "gi");
+    for (const m of joined.matchAll(g)) {
+      const n = parseInt(m[1], 10);
+      if (n >= 1 && n <= 20 && (best === null || (m.index ?? 0) >= best.idx)) {
+        best = { idx: m.index ?? 0, value: n };
+      }
+    }
+  }
+  const solo = new RegExp(SOLO_RE.source, "gi");
+  for (const m of joined.matchAll(solo)) {
+    if (best === null || (m.index ?? 0) > best.idx) best = { idx: m.index ?? 0, value: 1 };
+  }
+  return best?.value ?? null;
+}
+
+export type EffectiveStay = { checkIn: string; checkOut: string; nights: number | null };
+
+/**
+ * One canonical stay shared by search, prompt, itinerary, and inquiry.
+ * Sequential date refinement plus latest-nights checkout recompute,
+ * identical to the Trip Brief path. Null when dates are missing or invalid.
+ */
+export function resolveEffectiveStay(userTexts: string[], latestText: string, now = new Date()): EffectiveStay | null {
+  const dates = resolveHotelDates(userTexts, now);
+  if (!dates) return null;
+  let out = dates;
+  const latestNights = extractTripParams([latestText]).nights;
+  if (latestNights && latestNights !== nightsBetween(out.checkIn, out.checkOut)) {
+    const bumped = addNights(out.checkIn, latestNights);
+    if (bumped && bumped > out.checkIn) out = { checkIn: out.checkIn, checkOut: bumped };
+  }
+  return { ...out, nights: nightsBetween(out.checkIn, out.checkOut) };
 }
 
 /** Follow-up stays in trip mode when the recent transcript holds a brief. */
