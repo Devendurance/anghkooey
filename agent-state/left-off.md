@@ -1,6 +1,5 @@
 # Current checkpoint
-- Task: pinpoint Vercel MemWal init failure with staged diagnostics.
-- Done: createMemoryClient separates import, env validation, and SDK create plus key normalization into enumerated stages with sanitized logs. Production evidence (phase init, 5-7ms, no HTTP status, all 4 namespaces) rules out auth 401 and vector or identity causes, which were left untouched.
-- Done: tests 80 passed (6 new stage tests proving tags and non-leakage), typecheck/lint/build pass. No Mainnet writes, no re-merges, no DB reset.
-- Next: commit and push, verify Vercel READY, then owner retries one production search or chat and reads the stage field in Vercel logs. If stage is key_format_invalid, re-enter MEMWAL_PRIVATE_KEY in Vercel without quotes or whitespace and confirm the delegate matches the intended account. Untested: production recall receipt and search matches.
-- Evidence limits: 20-user channel:evidence is bounded, not a full inventory. Dashboard zero is pre-July-30 migration scope. Never claim empty account from zero hits.
+- Task: Trip Brief slice for Photon Muse hackathon complete and pushed.
+- Done: deterministic trip router + grounded brief prompt (src/server/trip-brief.ts), orchestrator trip path reusing recall/history/idempotency plus durable-only save gate, 17 mocked regression tests covering A-H with no Mainnet writes. Focused 17/17 pass, mocked suites 43 passed 4 skipped, typecheck/lint-clean/build pass. Commit 5813428 pushed to origin/main.
+- Next: owner runs 5-message REAL iMessage test on AWS (pull + restart, no env changes), then verifies recall receipt and follow-up refinement. Untested: production iMessage recall with real Walrus memories, real-Neon suite in sandbox times out (environmental, pre-existing).
+- Evidence limits: mocked briefs prove routing and prompt honesty, not live availability. Never claim empty account from zero hits. Trip plans stay conversational, only durable preferences persist.
