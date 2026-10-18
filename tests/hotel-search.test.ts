@@ -61,6 +61,7 @@ vi.mock("../src/server/repo", async (importOriginal) => {
 });
 
 import { handleMessage } from "../src/server/orchestrator";
+import { getRecentMessages } from "../src/server/repo";
 
 const OWNER = "11111111-1111-4111-8111-111111111111";
 const SESSION = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
@@ -322,6 +323,164 @@ describe("trip refinement precedence (deterministic, no LLM correction)", () => 
     );
     expect(dates).toEqual({ checkIn: "2026-12-04", checkOut: "2026-12-07" });
   });
+});
+
+describe("live QA two-message conversation (Nov 12-16 then extend to Nov 17, $220 to $250)", () => {
+  const TURN1 = "TRIP BRIEF London 2026-11-12 to 2026-11-16, 4 nights, 2 adults, budget $220";
+  const TURN2 =
+    "Actually extend my stay to November 17 and raise my nightly budget to $250. Update the hotel suggestions without starting over.";
+
+  it("checkout-only correction extends the range, full replacement and ambiguous singles behave", () => {
+    const now = new Date("2026-10-18T00:00:00Z");
+    expect(resolveHotelDates([TURN1], now)).toEqual({ checkIn: "2026-11-12", checkOut: "2026-11-16" });
+    expect(resolveHotelDates([TURN1, TURN2], now)).toEqual({
+      checkIn: "2026-11-12",
+      checkOut: "2026-11-17",
+    });
+    expect(
+      resolveHotelDates([TURN1, "Actually arrive November 11 instead"], now)
+    ).toEqual({ checkIn: "2026-11-11", checkOut: "2026-11-16" });
+    expect(
+      resolveHotelDates([TURN1, "Change to 2026-12-04 to 2026-12-07"], now)
+    ).toEqual({ checkIn: "2026-12-04", checkOut: "2026-12-07" });
+    expect(resolveHotelDates([TURN1, "What about November 14?"], now)).toEqual({
+      checkIn: "2026-11-12",
+      checkOut: "2026-11-16",
+    });
+  });
+
+  it("revised search, brief, and inquiry use Nov 12-17 and $250 with no stale data", async () => {
+    process.env.SERPAPI_API_KEY = "test-key";
+    const realFetch = globalThis.fetch;
+    const fetchUrls: string[] = [];
+    (globalThis as unknown as { fetch: unknown }).fetch = async (url: string) => {
+      fetchUrls.push(url);
+      const u = new URL(url);
+      const co = u.searchParams.get("check_out_date");
+      const cheap = co === "2026-11-17" ? 190 : 150;
+      const pricey = co === "2026-11-17" ? 250 : 200;
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          properties: [
+            {
+              name: "Riverside Hotel",
+              link: "https://www.example-hotel.com/riverside",
+              rate_per_night: { lowest: `$${cheap}`, extracted_lowest: cheap },
+            },
+            {
+              name: "Garden Inn",
+              link: "https://www.example-inn.com/garden",
+              rate_per_night: { lowest: `$${pricey}`, extracted_lowest: pricey },
+            },
+          ],
+        }),
+      } as unknown as Response;
+    };
+    try {
+      mocks.aliasIds = [OWNER];
+      mocks.recallImpl = async () => [
+        {
+          blob_id: "blob-topic",
+          text: "DOMAIN: hotel\nFACT: prefers quiet rooms, natural light, breakfast included",
+          distance: 0.4,
+        },
+      ];
+      const first = await handleMessage({
+        canonicalUserId: OWNER,
+        channel: "imessage",
+        sessionId: SESSION,
+        deliveryId: `liveqa-1-${Date.now()}`,
+        text: TURN1,
+        allowMemorySave: false,
+      });
+      expect(first.answer).toContain("trip brief");
+      expect(fetchUrls).toHaveLength(1);
+      expect(fetchUrls[0]).toContain("check_in_date=2026-11-12");
+      expect(fetchUrls[0]).toContain("check_out_date=2026-11-16");
+
+      vi.mocked(getRecentMessages).mockResolvedValueOnce([
+        { role: "user", text: TURN1 },
+        { role: "assistant", text: "Here's your trip brief for London Nov 12-16, 4 nights, $220." },
+      ]);
+      const second = await handleMessage({
+        canonicalUserId: OWNER,
+        channel: "imessage",
+        sessionId: SESSION,
+        deliveryId: `liveqa-2-${Date.now()}`,
+        text: TURN2,
+        allowMemorySave: false,
+      });
+      expect(fetchUrls).toHaveLength(2);
+      expect(fetchUrls[1]).toContain("check_in_date=2026-11-12");
+      expect(fetchUrls[1]).toContain("check_out_date=2026-11-17");
+      const prompt = mocks.lastMessages.map((m) => m.content).join("\n");
+      expect(prompt).toContain("Check-in: 2026-11-12");
+      expect(prompt).toContain("Check-out: 2026-11-17");
+      expect(prompt).toContain("Nights: 5");
+      expect(prompt).toContain("$250");
+      expect(prompt).toContain("Never write a placeholder over a known value");
+      expect(prompt).toContain("concise update only");
+      const liveBlock = mocks.lastMessages.find((m) =>
+        m.content.startsWith("Live hotel results")
+      )?.content;
+      expect(liveBlock).toContain("2026-11-17");
+      expect(liveBlock).not.toContain("2026-11-16");
+      expect(liveBlock).toContain("190");
+      expect(liveBlock).not.toContain("150");
+      expect(second.answer).not.toMatch(/booked for you|guaranteed availability|reservation confirmed/i);
+    } finally {
+      (globalThis as unknown as { fetch: unknown }).fetch = realFetch;
+      delete process.env.SERPAPI_API_KEY;
+    }
+  }, 30000);
+
+  it("explicit nights change with a known check-in recomputes checkout", async () => {
+    process.env.SERPAPI_API_KEY = "test-key";
+    const realFetch = globalThis.fetch;
+    const fetchUrls: string[] = [];
+    (globalThis as unknown as { fetch: unknown }).fetch = async (url: string) => {
+      fetchUrls.push(url);
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          properties: [
+            {
+              name: "Riverside Hotel",
+              link: "https://www.example-hotel.com/riverside",
+              rate_per_night: { extracted_lowest: 180 },
+            },
+          ],
+        }),
+      } as unknown as Response;
+    };
+    try {
+      mocks.aliasIds = [OWNER];
+      mocks.recallImpl = async () => [];
+      vi.mocked(getRecentMessages).mockResolvedValueOnce([
+        { role: "user", text: TURN1 },
+        { role: "assistant", text: "Here's your trip brief for London Nov 12-16, 4 nights." },
+      ]);
+      await handleMessage({
+        canonicalUserId: OWNER,
+        channel: "imessage",
+        sessionId: SESSION,
+        deliveryId: `liveqa-nights-${Date.now()}`,
+        text: "Actually make it 5 nights instead",
+        allowMemorySave: false,
+      });
+      expect(fetchUrls).toHaveLength(1);
+      expect(fetchUrls[0]).toContain("check_in_date=2026-11-12");
+      expect(fetchUrls[0]).toContain("check_out_date=2026-11-17");
+      const prompt = mocks.lastMessages.map((m) => m.content).join("\n");
+      expect(prompt).toContain("Nights: 5");
+    } finally {
+      (globalThis as unknown as { fetch: unknown }).fetch = realFetch;
+      delete process.env.SERPAPI_API_KEY;
+    }
+  }, 30000);
 });
 
 describe("deterministic date and budget parsing", () => {

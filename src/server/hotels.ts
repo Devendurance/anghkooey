@@ -73,46 +73,113 @@ function todayISO(now = new Date()): string {
   return now.toISOString().slice(0, 10);
 }
 
-/** Deterministic date resolver. Returns ISO dates only when the user stated them. Never invents. Later corrections override earlier dates. */
+function monthDayToISO(name: string, day: number, now: Date): string | null {
+  const m = MONTHS[name.toLowerCase()];
+  if (!m || day < 1 || day > 31) return null;
+  const tryYear = (y: number): string | null => {
+    const dt = new Date(Date.UTC(y, m - 1, day));
+    if (dt.getUTCFullYear() !== y || dt.getUTCMonth() !== m - 1 || dt.getUTCDate() !== day) return null;
+    return toISO(y, m, day);
+  };
+  const y = now.getUTCFullYear();
+  let iso = tryYear(y);
+  if (!iso) return null;
+  if (iso < todayISO(now)) iso = tryYear(y + 1);
+  return iso;
+}
+
+const MD_RE_SRC = "\\b(january|february|march|april|may|june|july|august|september|october|november|december)\\s+(\\d{1,2})(?:st|nd|rd|th)?\\b";
+
+function datesInMessage(t: string, now: Date): string[] {
+  const hits: { iso: string; idx: number }[] = [];
+  for (const m of t.matchAll(/\b(\d{4}-\d{2}-\d{2})\b/g)) {
+    if (isValidISO(m[1])) hits.push({ iso: m[1], idx: m.index ?? 0 });
+  }
+  for (const m of t.matchAll(new RegExp(MD_RE_SRC, "gi"))) {
+    const iso = monthDayToISO(m[1], parseInt(m[2], 10), now);
+    if (iso) hits.push({ iso, idx: m.index ?? 0 });
+  }
+  hits.sort((a, b) => a.idx - b.idx);
+  return hits.map((h) => h.iso);
+}
+
+function isCheckoutVerb(t: string): boolean {
+  return /extend|check-?out|checkout|leav(?:e|ing)|until|through|depart/i.test(t);
+}
+
+function isCheckinVerb(t: string): boolean {
+  if (/\barriv\w*|\bcheck-?in\b/i.test(t)) return true;
+  return /\bfrom\s+(\d{4}-\d{2}-\d{2}|january|february|march|april|may|june|july|august|september|october|november|december)/i.test(
+    t
+  );
+}
+
+/** Nights between checkout and checkin, or null when invalid. */
+export function nightsBetween(checkIn: string, checkOut: string): number | null {
+  if (!isValidISO(checkIn) || !isValidISO(checkOut)) return null;
+  const n = Math.round(
+    (Date.parse(`${checkOut}T00:00:00Z`) - Date.parse(`${checkIn}T00:00:00Z`)) / 86400000
+  );
+  return n >= 1 && n <= 90 ? n : null;
+}
+
+/** checkIn plus n nights as an ISO date, or null when invalid. */
+export function addNights(checkIn: string, nights: number): string | null {
+  if (!isValidISO(checkIn) || !Number.isInteger(nights) || nights < 1 || nights > 90) return null;
+  const dt = new Date(Date.parse(`${checkIn}T00:00:00Z`) + nights * 86400000);
+  return dt.toISOString().slice(0, 10);
+}
+
+/** Deterministic date resolver. Walks messages in order so one canonical range always results. Single-date follow-ups (checkout-only or checkin-only) refine the running range instead of replacing it with stale dates. Never invents; ambiguous singles keep the prior range. */
 export function resolveHotelDates(texts: string[], now = new Date()): { checkIn: string; checkOut: string } | null {
-  const joined = texts.join("\n").slice(0, 4000);
-  const isos = [...joined.matchAll(/\b(\d{4}-\d{2}-\d{2})\b/g)].map((m) => m[1]).filter(isValidISO);
-  if (isos.length >= 2) {
-    const [a, b] = isos.slice(-2);
-    if (a < b && a >= todayISO(now)) return { checkIn: a, checkOut: b };
-    return null;
-  }
-  const monthDay = [
-    ...joined.matchAll(
-      /\b(january|february|march|april|may|june|july|august|september|october|november|december)\s+(\d{1,2})(?:st|nd|rd|th)?\b/gi
-    ),
-  ];
-  if (monthDay.length >= 2) {
-    const year = now.getUTCFullYear();
-    const mk = (name: string, day: number, y: number): string | null => {
-      const m = MONTHS[name.toLowerCase()];
-      if (!m || day < 1 || day > 31) return null;
-      const dt = new Date(Date.UTC(y, m - 1, day));
-      if (dt.getUTCFullYear() !== y || dt.getUTCMonth() !== m - 1 || dt.getUTCDate() !== day) return null;
-      return toISO(y, m, day);
-    };
-    const pair = monthDay.slice(-2);
-    let a = mk(pair[0][1], parseInt(pair[0][2], 10), year);
-    let b = mk(pair[1][1], parseInt(pair[1][2], 10), year);
-    if (!a || !b) return null;
-    if (a < todayISO(now)) {
-      a = mk(pair[0][1], parseInt(pair[0][2], 10), year + 1) as string;
-      b = mk(pair[1][1], parseInt(pair[1][2], 10), year + 1) as string;
+  const today = todayISO(now);
+  let range: { checkIn: string; checkOut: string } | null = null;
+  let anchor: string | null = null;
+  for (const raw of texts) {
+    const t = raw.slice(0, 2000);
+    const found = datesInMessage(t, now);
+    if (found.length >= 2) {
+      const [a, b] = found.slice(-2);
+      if (a < b && a >= today) {
+        range = { checkIn: a, checkOut: b };
+        anchor = null;
+      }
+      continue;
     }
-    if (a >= b) {
-      const bYear = parseInt(b.slice(0, 4), 10) + 1;
-      b = `${bYear}${b.slice(4)}`;
-      if (a >= b) return null;
+    if (found.length === 1) {
+      const d = found[0];
+      if (!range) {
+        if (!anchor) {
+          anchor = d;
+        } else if (anchor !== d) {
+          const [a, b] = anchor < d ? [anchor, d] : [d, anchor];
+          if (a >= today) {
+            range = { checkIn: a, checkOut: b };
+            anchor = null;
+          } else {
+            anchor = d;
+          }
+        }
+        continue;
+      }
+      if (d === range.checkIn || d === range.checkOut) continue;
+      const saysOut = isCheckoutVerb(t);
+      const saysIn = isCheckinVerb(t);
+      if (saysOut && !saysIn && d > range.checkIn) {
+        range = { checkIn: range.checkIn, checkOut: d };
+      } else if (saysIn && !saysOut && d < range.checkOut && d >= today) {
+        range = { checkIn: d, checkOut: range.checkOut };
+      } else if (d > range.checkOut) {
+        range = { checkIn: range.checkIn, checkOut: d };
+      } else if (d < range.checkIn && d >= today) {
+        range = { checkIn: d, checkOut: range.checkOut };
+      }
+      continue;
     }
-    if (a < todayISO(now)) return null;
-    return { checkIn: a, checkOut: b };
   }
-  return null;
+  if (!range) return null;
+  if (range.checkOut <= range.checkIn || range.checkIn < today) return null;
+  return range;
 }
 
 export function parseNightlyBudget(budget: string | null): number | undefined {

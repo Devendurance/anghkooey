@@ -16,7 +16,7 @@ import {
   extractTripParams,
   isTripFollowUp,
 } from "./trip-brief";
-import { parseNightlyBudget, resolveHotelDates, searchHotels, type HotelSearchResult } from "./hotels";
+import { addNights, nightsBetween, parseNightlyBudget, resolveHotelDates, searchHotels, type HotelSearchResult } from "./hotels";
 import {
   claimInboundEvent,
   DuplicateDeliveryError,
@@ -229,17 +229,44 @@ export async function handleMessage(input: HandleMessageInput): Promise<ChatResu
   const tripExplicit = detectTripRequest(text);
   const tripFollow = !tripExplicit && isTripFollowUp(text, history);
   const tripMode = tripExplicit || tripFollow;
-  const tripParams = tripMode
-    ? extractTripParams([...history.filter((h) => h.role === "user").map((h) => h.text), text])
-    : null;
-  // One hotel provider only (SerpApi). Best-effort: any failure degrades
-  // to the P0 brief and never blocks or fabricates the answer.
+  const userTexts = tripMode
+    ? [...history.filter((h) => h.role === "user").map((h) => h.text), text]
+    : [];
+  const tripParams = tripMode ? extractTripParams(userTexts) : null;
+  const hasPriorBrief =
+    tripMode &&
+    history
+      .filter((h) => h.role === "assistant")
+      .slice(-3)
+      .some((h) => /trip brief/i.test(h.text));
+  // One canonical effective range shared by search, prompt, display, and
+  // inquiry. Single-date refinements update the running range; an explicit
+  // nights change with a known check-in recomputes checkout.
+  let stay: {
+    checkIn: string;
+    checkOut: string;
+    nights: number;
+    budget: string | null;
+    adults: number;
+  } | null = null;
   let hotels: HotelSearchResult | null = null;
   if (tripMode && tripParams?.destination) {
     try {
-      const userTexts = [...history.filter((h) => h.role === "user").map((h) => h.text), text];
-      const dates = resolveHotelDates(userTexts);
+      let dates = resolveHotelDates(userTexts);
+      const latestNights = extractTripParams([text]).nights;
+      if (dates && latestNights && latestNights !== nightsBetween(dates.checkIn, dates.checkOut)) {
+        const bumped = addNights(dates.checkIn, latestNights);
+        if (bumped && bumped > dates.checkIn) dates = { checkIn: dates.checkIn, checkOut: bumped };
+      }
       if (dates) {
+        const nights = nightsBetween(dates.checkIn, dates.checkOut) ?? tripParams.nights ?? 2;
+        stay = {
+          checkIn: dates.checkIn,
+          checkOut: dates.checkOut,
+          nights,
+          budget: tripParams.budget,
+          adults: 2,
+        };
         hotels = await searchHotels({
           destination: tripParams.destination,
           checkIn: dates.checkIn,
@@ -255,6 +282,10 @@ export async function handleMessage(input: HandleMessageInput): Promise<ChatResu
       hotels = { status: "provider_unavailable", candidates: [], observedAt: new Date().toISOString() };
     }
   }
+  const effectiveParams =
+    tripMode && tripParams && stay
+      ? { ...tripParams, timing: `${stay.checkIn} to ${stay.checkOut}`, nights: stay.nights }
+      : tripParams;
   let answer: string;
   try {
     answer =
@@ -265,8 +296,10 @@ export async function handleMessage(input: HandleMessageInput): Promise<ChatResu
               memories,
               history,
               recallStatus,
-              params: tripParams,
+              params: effectiveParams ?? tripParams,
               hotels,
+              stay,
+              isRevision: hasPriorBrief,
             }),
             maxTokens: 1000,
           })
@@ -442,6 +475,11 @@ export async function handleMessage(input: HandleMessageInput): Promise<ChatResu
       recall_status: recallStatus,
       blob_ids: receipts.map((r) => r.blobId),
       saves,
+      trip_mode: tripMode,
+      hotel_status: hotels?.status ?? null,
+      hotel_dates:
+        stay != null ? `${stay.checkIn}:${stay.checkOut}` : null,
+      hotel_candidates: hotels?.candidates.length ?? 0,
       latency_ms: Date.now() - started,
     })
   );
