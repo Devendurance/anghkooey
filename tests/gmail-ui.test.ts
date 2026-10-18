@@ -9,7 +9,7 @@ import {
 describe("gmail settings UI states", () => {
   it("maps the OAuth success return to a notice without claiming sending works", () => {
     const ret = gmailReturnState("?gmail=connected");
-    expect(ret && "notice" in ret && ret.notice).toContain("Sending stays off");
+    expect(ret && "notice" in ret && ret.notice).toContain("explicit approval");
   });
 
   it("maps each OAuth failure return to a distinct, honest error", () => {
@@ -75,7 +75,7 @@ describe("privacy policy honesty", () => {
       "no accounts",
       "not edited or permanently deleted",
       "does not read your mail",
-      "without an explicit approval",
+      "explicit",
     ]) {
       expect(lower).toContain(required);
     }

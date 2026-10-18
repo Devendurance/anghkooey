@@ -6,6 +6,17 @@ import { imessage } from "spectrum-ts/providers/imessage";
 import { getOrCreateChannelConversation, resolveChannelUser } from "../src/server/channel-identity";
 import { cancelMerge, confirmLink, confirmMerge, requestMerge } from "../src/server/linking";
 import { handleMessage } from "../src/server/orchestrator";
+import {
+  approveAndSend,
+  cancelPending,
+  formatPreviewMessage,
+  getPendingDraft,
+  isCancelCommand,
+  isPrepareCommand,
+  isPreviewCommand,
+  parseSendCommand,
+  prepareDraft,
+} from "../src/server/gmail-send";
 import { getConsentAt, listMemories, setConsent } from "../src/server/repo";
 import { checkRateLimit } from "../src/server/rate-limit";
 import { isDuplicateDeliveryError } from "../src/server/repo";
@@ -31,6 +42,7 @@ function helpText(channel: string): string {
     "Anghkooey here. I remember your hotel, travel and dining preferences.",
     channel === "telegram" ? "Commands: /start /help /memory /connect" : "Commands: HELP, MEMORY, CONNECT work too.",
     "Memory is off until you say YES. Say YES to enable it, or ask me anything and I will answer without saving.",
+    "Email: EMAIL prepares a hotel inquiry, PREVIEW shows the pending draft, SEND <code> approves it once, CANCEL stops it.",
     "To link this chat to your web account: open your web session, create a link code, then send that code here.",
   ].join("\n");
 }
@@ -202,6 +214,101 @@ async function main() {
         consentAt = await getConsentAt(userId).catch(() => new Date().toISOString());
         await message.reply("Memory is now ON. Tell me a hotel, travel or dining preference and I will remember it.");
         continue;
+      }
+
+      // Gmail approved single send. Runs before the generic orchestrator so
+      // approvals never trigger memory extraction or an LLM reply.
+      const sendCode = parseSendCommand(text);
+      if (sendCode || isPreviewCommand(text) || isCancelCommand(text) || isPrepareCommand(text)) {
+        const { getCanonicalUserId } = await import("../src/server/linking");
+        const canonical = await getCanonicalUserId(userId).catch(() => userId);
+        const gmailLog = (event: string, status: string) =>
+          console.log(
+            JSON.stringify({
+              worker: "photon",
+              event,
+              platform,
+              sender_hash: hash12(senderId),
+              status,
+              latency_ms: Date.now() - started,
+            })
+          );
+        try {
+          if (sendCode) {
+            const rl = await checkRateLimit(`gmail:send:${hash12(senderId)}`, 5, 60_000);
+            if (!rl.allowed) {
+              await message.reply("You are sending approvals too quickly. Wait a moment and try again.");
+              continue;
+            }
+            const outcome = await approveAndSend({ canonicalUserId: canonical, code: sendCode });
+            if (outcome.status === "sent") {
+              await message.reply(
+                `Accepted by Gmail (receipt ${outcome.gmailMessageId.slice(0, 12)}). Your inquiry was handed to Gmail; delivery to the inbox is up to Gmail.`
+              );
+            } else if (outcome.status === "already_sent") {
+              await message.reply(
+                `That approval was already used (receipt ${outcome.gmailMessageId.slice(0, 12)}). Nothing was sent twice.`
+              );
+            } else if (outcome.status === "invalid_code") {
+              await message.reply("That code doesn't match a pending email. Reply PREVIEW to see the current draft.");
+            } else if (outcome.status === "expired") {
+              await message.reply("That approval expired. Ask for a fresh preview to approve again.");
+            } else if (outcome.status === "cancelled") {
+              await message.reply("That email was cancelled. Ask for a new preview to start over.");
+            } else if (outcome.status === "failed" && outcome.errorCode === "refresh_failed") {
+              await message.reply("Gmail needs reconnecting. Open Settings and connect Gmail again.");
+            } else if (outcome.status === "failed") {
+              await message.reply("Gmail didn't accept it, so nothing was sent. Reply PREVIEW for a fresh draft.");
+            } else {
+              await message.reply(
+                "The send outcome is uncertain, so it was NOT retried. Reply PREVIEW to check before anything is resent."
+              );
+            }
+            gmailLog("gmail_send", outcome.status);
+            continue;
+          }
+          if (isPreviewCommand(text)) {
+            const draft = await getPendingDraft(canonical);
+            if (!draft) {
+              await message.reply("No pending email. Say EMAIL to prepare a hotel inquiry.");
+            } else if (draft.expired) {
+              await message.reply("The pending email expired. Say EMAIL to prepare a fresh one.");
+            } else {
+              await message.reply(formatPreviewMessage({ ...draft, code: null }).slice(0, 3500));
+            }
+            gmailLog("gmail_preview", draft ? (draft.expired ? "expired" : "shown") : "none");
+            continue;
+          }
+          if (isCancelCommand(text)) {
+            const { cancelled } = await cancelPending(canonical);
+            await message.reply(cancelled ? "Cancelled. No email was sent." : "No pending email to cancel.");
+            gmailLog("gmail_cancel", cancelled ? "cancelled" : "none");
+            continue;
+          }
+          const rl = await checkRateLimit(`gmail:prepare:${hash12(senderId)}`, 5, 60_000);
+          if (!rl.allowed) {
+            await message.reply("You are preparing emails too quickly. Wait a moment and try again.");
+            continue;
+          }
+          const prepared = await prepareDraft({ canonicalUserId: canonical, conversationId });
+          if (prepared.status === "no_gmail") {
+            await message.reply("No Gmail connected for this chat. Connect Gmail in your web Settings first.");
+          } else if (prepared.status === "need_info") {
+            await message.reply(
+              `To draft the email I still need: ${prepared.missing.join(", ")}. Tell me, then say EMAIL again.`
+            );
+          } else {
+            await space.responding(async () => {
+              await message.reply(formatPreviewMessage(prepared.preview).slice(0, 3500));
+            });
+          }
+          gmailLog("gmail_prepare", prepared.status);
+          continue;
+        } catch {
+          await message.reply("Something went wrong on my side. No email was sent. Try again in a moment.");
+          gmailLog("gmail_error", "failed");
+          continue;
+        }
       }
 
       const allowSave = consentAt !== null;

@@ -77,9 +77,15 @@ export default function PrivacyPage() {
           </p>
           <p className="mem-text">
             A mailbox is bound to the identity that connected it. A different chat sender cannot use your Gmail
-            connection. Sending is currently disabled: connecting Gmail does not send anything, and no email is
-            sent without an explicit approval step. Disconnecting in Settings deletes the stored connection and asks
-            Google to revoke access.
+            connection. Connecting Gmail does not send anything by itself: every email needs an explicit
+            single-use approval from the same chat. Disconnecting in Settings deletes the stored connection
+            and asks Google to revoke access.
+          </p>
+          <p className="mem-text">
+            Approved hotel inquiries are prepared in chat, shown back to you in full, and sent only after you
+            reply with the single-use approval code. Each approval works once, expires quickly, and covers one
+            exact email. The stored record is the Gmail message identifier returned by Google, which confirms
+            receipt by Gmail, not delivery to the recipient inbox. Draft contents are encrypted at rest.
           </p>
         </section>
 

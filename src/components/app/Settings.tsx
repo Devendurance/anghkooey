@@ -253,14 +253,14 @@ export function Settings() {
                         {gmail.connectedAt ? ` since ${dateFmt(gmail.connectedAt)}` : ""}.
                       </p>
                       <p className="mem-text">
-                        Sending isn&rsquo;t enabled yet. Nothing is sent automatically, and no email goes out without
-                        your explicit approval. <Link href="/privacy" className="acct-inline">Privacy Policy</Link>
+                        Nothing is sent automatically. Each email needs your explicit approval in chat.{" "}
+                        <Link href="/privacy" className="acct-inline">Privacy Policy</Link>
                       </p>
                     </>
                   ) : (
                     <>
                       <p className="mem-text">
-                        Not connected. A future update will let Anghkooey send hotel inquiries you approve, using
+                        Not connected. Once connected, Anghkooey can send hotel inquiries you approve, using
                         your own Gmail address.
                       </p>
                       <p className="mem-text">

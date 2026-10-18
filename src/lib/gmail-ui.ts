@@ -26,7 +26,7 @@ export function gmailReturnState(search: string): GmailReturn {
     return null;
   }
   if (q.get("gmail") === "connected") {
-    return { notice: "Gmail connected. Sending stays off until a future update enables approved sends." };
+    return { notice: "Gmail connected. Each email still needs your explicit approval." };
   }
   if (q.get("gmail") !== "error") return null;
   switch (q.get("reason")) {
