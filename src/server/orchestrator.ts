@@ -11,6 +11,12 @@ import { classifyMemwalError, recallFacts, saveFact, type MemwalDiagnosis } from
 import { assertUUID } from "./namespace";
 import { buildGroundedMessages, type MemoryHit, type RecallStatus } from "./prompts";
 import {
+  buildTripBriefMessages,
+  detectTripRequest,
+  extractTripParams,
+  isTripFollowUp,
+} from "./trip-brief";
+import {
   claimInboundEvent,
   DuplicateDeliveryError,
   filterSuperseded,
@@ -214,15 +220,35 @@ export async function handleMessage(input: HandleMessageInput): Promise<ChatResu
   }
 
   // 3. Grounded answer via DeepSeek (non-thinking mode, one bounded
-  // retry inside chatComplete). A failure here releases the inbound event
-  // so a redelivery can be retried instead of being lost as a duplicate.
+  // retry inside chatComplete). Trip requests take a dedicated brief
+  // path that reuses the same recall + history. A failure here releases
+  // the inbound event so a redelivery can be retried instead of being
+  // lost as a duplicate.
   const model = process.env.DEEPSEEK_MODEL ?? "deepseek-flash";
+  const tripExplicit = detectTripRequest(text);
+  const tripFollow = !tripExplicit && isTripFollowUp(text, history);
+  const tripMode = tripExplicit || tripFollow;
+  const tripParams = tripMode
+    ? extractTripParams([...history.filter((h) => h.role === "user").map((h) => h.text), text])
+    : null;
   let answer: string;
   try {
-    answer = await chatComplete({
-      messages: buildGroundedMessages({ userText: text, memories, history, recallStatus }),
-      maxTokens: 1000,
-    });
+    answer =
+      tripMode && tripParams
+        ? await chatComplete({
+            messages: buildTripBriefMessages({
+              userText: text,
+              memories,
+              history,
+              recallStatus,
+              params: tripParams,
+            }),
+            maxTokens: 1000,
+          })
+        : await chatComplete({
+            messages: buildGroundedMessages({ userText: text, memories, history, recallStatus }),
+            maxTokens: 1000,
+          });
   } catch (e) {
     if (hasDb()) {
       try {
@@ -259,7 +285,12 @@ export async function handleMessage(input: HandleMessageInput): Promise<ChatResu
       // Malformed or empty extraction never blocks the answer and never
       // saves: parseFactsPayload yields [] and every candidate still
       // passes validateFacts + isSaveWorthy + confirmed Walrus persistence.
-      const facts = validateFacts(parseFactsPayload(rawJson)).filter(isSaveWorthy).slice(0, 2);
+      // Trip plans stay conversational: only durable preferences persist.
+      // Trip-specific constraints (dates, destination, party) refine the
+      // brief in this session and are never written as durable memories.
+      const facts = validateFacts(parseFactsPayload(rawJson))
+        .filter((f) => f.scope === "durable" && isSaveWorthy(f))
+        .slice(0, 2);
       for (let i = 0; i < facts.length; i++) {
         const f = facts[i];
         const storageText = formatFactForStorage(f);
