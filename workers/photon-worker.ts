@@ -309,8 +309,11 @@ async function main() {
           gmailLog("gmail_prepare", prepared.status);
           continue;
         } catch {
-          await message.reply("Something went wrong on my side. No email was sent. Try again in a moment.");
-          gmailLog("gmail_error", "failed");
+          // Uncaught here means the outcome is genuinely unknown: the throw
+          // may have happened after Gmail accepted the message. Never claim
+          // nothing was sent.
+          await message.reply("Could not confirm the send outcome. Check Gmail Sent before attempting another send.");
+          gmailLog("gmail_error", "uncertain");
           continue;
         }
       }

@@ -207,6 +207,15 @@ describe("gmail-send worker honesty (static)", () => {
     expect(src).toContain("Check your Gmail Sent folder");
     expect(src).toContain("receipt_unstored");
   });
+  it("uses confirm-first wording for uncaught gmail errors, never a false not-sent claim", () => {
+    expect(src).toContain("Could not confirm the send outcome. Check Gmail Sent before attempting another send.");
+    expect(src).toContain('gmailLog("gmail_error", "uncertain")');
+    expect(src).not.toContain("Something went wrong on my side. No email was sent. Try again in a moment.");
+  });
+  it("keeps explicit not-sent wording only where no send could have happened", () => {
+    expect(src).toContain("Gmail didn't accept it, so nothing was sent.");
+    expect(src).toContain("Cancelled. No email was sent.");
+  });
 });
 
 describe("gmail-send log hygiene (static)", () => {
@@ -604,6 +613,60 @@ dbSuite("live QA reliability (real Neon, throwaway identities, stubbed Google)",
       expect(gmailSend.formatPreviewMessage(prepared.preview)).not.toContain("traveler count not stated");
     } finally {
       await cleanup(sql, user);
+    }
+  }, 60000);
+});
+
+dbSuite("uncertain-send safety (real Neon, throwaway identities, stubbed Google)", () => {
+  it("Gmail accept plus receipt-write failure reports unknown and never resends", async () => {
+    const { createUser } = await import("../src/server/session");
+    const { saveGmailConnection } = await import("../src/server/gmail");
+    const { createConversationSession, saveRecentMessage } = await import("../src/server/repo");
+    const gmailSend = await import("../src/server/gmail-send");
+    const { getSql } = await import("../src/server/db");
+    const sql = getSql();
+    const user = await createUser();
+    try {
+      await saveGmailConnection({
+        canonicalUserId: user,
+        email: "owner@gmail.com",
+        refreshToken: "1//refresh-token",
+        accessToken: null,
+        accessExpiresIn: 3600,
+        scope: "openid email https://www.googleapis.com/auth/gmail.send",
+      });
+      const conv = await createConversationSession(user, "imessage");
+      await saveRecentMessage({ sessionId: conv, role: "user", text: "TRIP BRIEF London 2026-11-12 to 2026-11-16, 4 nights, budget $220" });
+      const prepared = await gmailSend.prepareDraft({ canonicalUserId: user, conversationId: conv });
+      expect(prepared.status).toBe("ready");
+      if (prepared.status !== "ready") return;
+      const calls: string[] = [];
+      const fetchFn = (async (url: string) => {
+        calls.push(url);
+        if (url.includes("oauth2.googleapis.com/token")) {
+          return { ok: true, status: 200, json: async () => ({ access_token: "ya29.fresh", expires_in: 3599 }) };
+        }
+        return { ok: true, status: 200, json: async () => ({ id: "gmail-msg-7", threadId: "t7" }) };
+      }) as unknown as (url: string, init?: RequestInit) => Promise<Response>;
+      const failingPersist = async () => {
+        throw new Error("receipt table unavailable");
+      };
+      const first = await gmailSend.approveAndSend({
+        canonicalUserId: user,
+        code: prepared.preview.code,
+        fetchFn,
+        persistReceipt: failingPersist,
+      });
+      expect(first).toMatchObject({ status: "unknown", errorCode: "receipt_unstored" });
+      const retry = await gmailSend.approveAndSend({
+        canonicalUserId: user,
+        code: prepared.preview.code,
+        fetchFn,
+      });
+      expect(retry.status).toBe("unknown");
+      expect(calls.filter((u) => u.includes("gmail.googleapis.com"))).toHaveLength(1);
+    } finally {
+      await sql`delete from users where id = ${user}`;
     }
   }, 60000);
 });

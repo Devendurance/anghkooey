@@ -407,11 +407,24 @@ export async function approveAndSend(args: {
   const draft = claimed[0];
   const draftId = draft.id as string;
   const fail = async (errorCode: string): Promise<SendOutcome> => {
-    await sql`update gmail_drafts set status = 'failed', error_code = ${errorCode}, updated_at = now() where id = ${draftId}`;
+    // Failed outcomes are only produced before any Gmail POST or on explicit
+    // provider rejection, so the write below is bookkeeping. Never throw: a
+    // failed write must not convert a safe failure into an uncertain one.
+    try {
+      await sql`update gmail_drafts set status = 'failed', error_code = ${errorCode}, updated_at = now() where id = ${draftId}`;
+    } catch {
+      // Best effort only.
+    }
     return { status: "failed", errorCode };
   };
   const unknown = async (errorCode: string): Promise<SendOutcome> => {
-    await sql`update gmail_drafts set status = 'unknown', error_code = ${errorCode}, updated_at = now() where id = ${draftId}`;
+    // The Gmail POST may already have succeeded, so an uncertain outcome
+    // must stay uncertain even if recording it fails. Never throw.
+    try {
+      await sql`update gmail_drafts set status = 'unknown', error_code = ${errorCode}, updated_at = now() where id = ${draftId}`;
+    } catch {
+      // Best effort only.
+    }
     return { status: "unknown", errorCode };
   };
 
