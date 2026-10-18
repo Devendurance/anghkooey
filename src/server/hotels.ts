@@ -59,21 +59,26 @@ function toISO(y: number, m: number, d: number): string {
 }
 
 function isValidISO(s: string): boolean {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
-  const t = Date.parse(`${s}T00:00:00Z`);
-  return !Number.isNaN(t);
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s);
+  if (!m) return false;
+  const y = Number(m[1]);
+  const mo = Number(m[2]);
+  const d = Number(m[3]);
+  if (mo < 1 || mo > 12 || d < 1 || d > 31) return false;
+  const dt = new Date(Date.UTC(y, mo - 1, d));
+  return dt.getUTCFullYear() === y && dt.getUTCMonth() === mo - 1 && dt.getUTCDate() === d;
 }
 
 function todayISO(now = new Date()): string {
   return now.toISOString().slice(0, 10);
 }
 
-/** Deterministic date resolver. Returns ISO dates only when the user stated them. Never invents. */
+/** Deterministic date resolver. Returns ISO dates only when the user stated them. Never invents. Later corrections override earlier dates. */
 export function resolveHotelDates(texts: string[], now = new Date()): { checkIn: string; checkOut: string } | null {
   const joined = texts.join("\n").slice(0, 4000);
   const isos = [...joined.matchAll(/\b(\d{4}-\d{2}-\d{2})\b/g)].map((m) => m[1]).filter(isValidISO);
   if (isos.length >= 2) {
-    const [a, b] = isos;
+    const [a, b] = isos.slice(-2);
     if (a < b && a >= todayISO(now)) return { checkIn: a, checkOut: b };
     return null;
   }
@@ -87,14 +92,17 @@ export function resolveHotelDates(texts: string[], now = new Date()): { checkIn:
     const mk = (name: string, day: number, y: number): string | null => {
       const m = MONTHS[name.toLowerCase()];
       if (!m || day < 1 || day > 31) return null;
+      const dt = new Date(Date.UTC(y, m - 1, day));
+      if (dt.getUTCFullYear() !== y || dt.getUTCMonth() !== m - 1 || dt.getUTCDate() !== day) return null;
       return toISO(y, m, day);
     };
-    let a = mk(monthDay[0][1], parseInt(monthDay[0][2], 10), year);
-    let b = mk(monthDay[1][1], parseInt(monthDay[1][2], 10), year);
+    const pair = monthDay.slice(-2);
+    let a = mk(pair[0][1], parseInt(pair[0][2], 10), year);
+    let b = mk(pair[1][1], parseInt(pair[1][2], 10), year);
     if (!a || !b) return null;
     if (a < todayISO(now)) {
-      a = mk(monthDay[0][1], parseInt(monthDay[0][2], 10), year + 1) as string;
-      b = mk(monthDay[1][1], parseInt(monthDay[1][2], 10), year + 1) as string;
+      a = mk(pair[0][1], parseInt(pair[0][2], 10), year + 1) as string;
+      b = mk(pair[1][1], parseInt(pair[1][2], 10), year + 1) as string;
     }
     if (a >= b) {
       const bYear = parseInt(b.slice(0, 4), 10) + 1;
@@ -121,11 +129,41 @@ function sanitizeUrl(raw: unknown): string | null {
   const v = raw.trim().slice(0, 500);
   try {
     const u = new URL(v);
-    if (u.protocol !== "https:" && u.protocol !== "http:") return null;
+    if (u.protocol !== "https:") return null;
     return u.toString().slice(0, 500);
   } catch {
     return null;
   }
+}
+
+/** Preferred documented shape first: extracted_lowest numeric, then lowest "$156" string. Legacy price shapes stay supported. Never throws. */
+function extractNightlyAmount(rec: Record<string, unknown>): number {
+  const rpn = rec.rate_per_night as
+    | { extracted_lowest?: unknown; lowest?: unknown; price?: unknown }
+    | number
+    | string
+    | null
+    | undefined;
+  if (rpn !== null && typeof rpn === "object") {
+    if (typeof rpn.extracted_lowest === "number" && Number.isFinite(rpn.extracted_lowest)) return rpn.extracted_lowest;
+    if (typeof rpn.extracted_lowest === "string") {
+      const n = parseFloat(rpn.extracted_lowest.replace(/[^0-9.]/g, ""));
+      if (Number.isFinite(n)) return n;
+    }
+    if (typeof rpn.lowest === "string") {
+      const n = parseFloat(rpn.lowest.replace(/[^0-9.]/g, ""));
+      if (Number.isFinite(n)) return n;
+    }
+    if (typeof rpn.price === "number" && Number.isFinite(rpn.price)) return rpn.price;
+    if (typeof rpn.price === "string") {
+      const n = parseFloat(rpn.price.replace(/[^0-9.]/g, ""));
+      if (Number.isFinite(n)) return n;
+    }
+    return NaN;
+  }
+  if (typeof rpn === "number") return rpn;
+  if (typeof rpn === "string") return parseFloat(rpn.replace(/[^0-9.]/g, ""));
+  return NaN;
 }
 
 function sanitizeText(raw: unknown, max = 120): string | null {
@@ -218,6 +256,21 @@ export async function searchHotels(
   } catch {
     return { status: "provider_unavailable", candidates: [], observedAt };
   }
+  // SerpApi signals failures inside JSON even on HTTP 200. Never treat
+  // an error payload as inventory.
+  const errPayload = (data as { error?: unknown }).error;
+  const errText =
+    typeof errPayload === "string"
+      ? errPayload
+      : errPayload !== null && typeof errPayload === "object"
+        ? String((errPayload as { message?: unknown }).message ?? "")
+        : "";
+  if (errText.trim()) {
+    if (/rate|limit|429|too many/i.test(errText)) {
+      return { status: "provider_rate_limited", candidates: [], observedAt };
+    }
+    return { status: "provider_unavailable", candidates: [], observedAt, note: errText.slice(0, 140) };
+  }
   const props = (data as { properties?: unknown }).properties;
   if (!Array.isArray(props) || props.length === 0) {
     return { status: "no_results", candidates: [], observedAt };
@@ -228,17 +281,13 @@ export async function searchHotels(
     const rec = p as Record<string, unknown>;
     const name = sanitizeText(rec.name, 80);
     if (!name) continue;
+    // Optional provider links only. A missing link skips that property;
+    // a URL is never invented and only https is accepted.
     const link = sanitizeUrl(rec.link ?? rec.website);
     if (!link) continue;
     const address = sanitizeText(rec.address ?? rec.location, 140) ?? undefined;
-    const rateRaw = (rec.rate_per_night as { price?: unknown } | undefined)?.price ?? rec.rate_per_night;
+    const amount = extractNightlyAmount(rec);
     let observedNightlyRate: HotelCandidate["observedNightlyRate"];
-    const amount =
-      typeof rateRaw === "number"
-        ? rateRaw
-        : typeof rateRaw === "string"
-          ? parseFloat(rateRaw.replace(/[^0-9.]/g, ""))
-          : NaN;
     if (Number.isFinite(amount) && amount > 0 && amount < 100000) {
       const c = sanitizeCurrency(
         (rec.rate_currency as string | undefined) ??

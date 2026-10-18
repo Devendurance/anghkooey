@@ -55,6 +55,7 @@ const DEST_PATTERNS = [
   /\bhotel\s+(?:stay\s+)?in\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,2})/,
   /\bhotel\s+for\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,2})/,
   /\bin\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,2})\s+for\s+(?:\w+\s+)?nights?\b/,
+  /\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,2})\s+for\s+\d+\s*nights?\b/,
   /\bin\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,2})(?:\s+for\s+(?:a|my|the|our))?\s*(?:trip|stay|visit)\b/i,
   /\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,2})\s+\d{4}-\d{2}-\d{2}/,
 ];
@@ -87,33 +88,47 @@ function cleanPlace(s: string): string | null {
   return v;
 }
 
-/** Extract best-effort trip facts from recent user texts. Deterministic. */
+/** Extract best-effort trip facts from recent user texts. Deterministic. Later corrections override earlier values. */
 export function extractTripParams(texts: string[]): TripParams {
   const joined = texts.join("\n").slice(0, 4000);
+  // Destination: most recent message wins so a corrected city sticks.
   let destination: string | null = null;
-  for (const re of DEST_PATTERNS) {
-    const m = joined.match(re);
-    if (m?.[1]) {
-      const cleaned = cleanPlace(m[1]);
-      if (cleaned) {
-        destination = cleaned;
-        break;
+  for (let i = texts.length - 1; i >= 0; i--) {
+    const t = texts[i];
+    let found: string | null = null;
+    for (const re of DEST_PATTERNS) {
+      const m = t.match(re);
+      if (m?.[1]) {
+        const cleaned = cleanPlace(m[1]);
+        if (cleaned) {
+          found = cleaned;
+          break;
+        }
       }
     }
+    if (found) {
+      destination = found;
+      break;
+    }
   }
+  // Nights, timing, budget: last stated value wins.
   let nights: number | null = null;
-  const nd = joined.match(NIGHTS_DIGIT_RE);
-  if (nd) {
-    const n = parseInt(nd[1], 10);
+  const digitHits = [...joined.matchAll(/(\d{1,3})\s*nights?\b/gi)];
+  if (digitHits.length > 0) {
+    const n = parseInt(digitHits[digitHits.length - 1][1], 10);
     if (n >= 1 && n <= 90) nights = n;
   } else {
-    const nw = joined.match(NIGHTS_WORD_RE);
-    if (nw) nights = WORD_NUMBERS[nw[1].toLowerCase()] ?? null;
+    const wordHits = [
+      ...joined.matchAll(
+        /\b(one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|couple|few)\s*nights?\b/gi
+      ),
+    ];
+    if (wordHits.length > 0) nights = WORD_NUMBERS[wordHits[wordHits.length - 1][1].toLowerCase()] ?? null;
   }
-  const tm = joined.match(TIMING_RE);
-  const timing = tm ? tm[1].trim().slice(0, 80) : null;
-  const bm = joined.match(BUDGET_RE);
-  const budget = bm ? bm[1].trim().slice(0, 80) : null;
+  const timingHits = [...joined.matchAll(new RegExp(TIMING_RE.source, "gi"))];
+  const timing = timingHits.length > 0 ? timingHits[timingHits.length - 1][1].trim().slice(0, 80) : null;
+  const budgetHits = [...joined.matchAll(new RegExp(BUDGET_RE.source, "gi"))];
+  const budget = budgetHits.length > 0 ? budgetHits[budgetHits.length - 1][1].trim().slice(0, 80) : null;
   return { destination, nights, timing, budget };
 }
 

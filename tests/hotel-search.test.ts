@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { buildTripBriefMessages } from "../src/server/trip-brief";
+import { buildTripBriefMessages, extractTripParams } from "../src/server/trip-brief";
 import {
   parseNightlyBudget,
   resolveHotelDates,
@@ -184,6 +184,143 @@ describe("provider verification gate (SerpApi only, no live keys)", () => {
       }
     );
     expect(empty.status).toBe("no_results");
+  });
+});
+
+describe("SerpApi documented response contract", () => {
+  it("prefers extracted_lowest and falls back to the lowest string", async () => {
+    const res = await searchHotels(
+      { destination: "London", checkIn: "2026-11-12", checkOut: "2026-11-15" },
+      {
+        apiKey: "test-key",
+        fetchFn: (async () => ({
+          ok: true,
+          status: 200,
+          json: async () => ({
+            properties: [
+              {
+                name: "Documented Hotel",
+                link: "https://www.example-hotel.com/documented",
+                rate_per_night: {
+                  lowest: "$156",
+                  extracted_lowest: 156,
+                  before_taxes_fees: "$129",
+                  extracted_before_taxes_fees: 129,
+                },
+              },
+              {
+                name: "String Only Hotel",
+                link: "https://www.example-hotel.com/string-only",
+                rate_per_night: { lowest: "$201" },
+              },
+            ],
+          }),
+        })) as unknown as (url: string) => Promise<Response>,
+      }
+    );
+    expect(res.status).toBe("ok");
+    expect(res.candidates).toHaveLength(2);
+    expect(res.candidates[0].observedNightlyRate?.amount).toBe(156);
+    expect(res.candidates[1].observedNightlyRate?.amount).toBe(201);
+  });
+
+  it("skips properties with missing links without inventing booking URLs", async () => {
+    const res = await searchHotels(
+      { destination: "London", checkIn: "2026-11-12", checkOut: "2026-11-15" },
+      {
+        apiKey: "test-key",
+        fetchFn: (async () => ({
+          ok: true,
+          status: 200,
+          json: async () => ({
+            properties: [
+              { name: "No Link Hotel", rate_per_night: { extracted_lowest: 120 } },
+              {
+                name: "Linked Hotel",
+                link: "https://www.example-hotel.com/linked",
+                rate_per_night: { extracted_lowest: 140 },
+              },
+            ],
+          }),
+        })) as unknown as (url: string) => Promise<Response>,
+      }
+    );
+    expect(res.status).toBe("ok");
+    expect(res.candidates).toHaveLength(1);
+    expect(res.candidates[0].name).toBe("Linked Hotel");
+    expect(res.candidates[0].sourceUrl).toBe("https://www.example-hotel.com/linked");
+  });
+
+  it("rejects plain-http links under the https-only contract", async () => {
+    const res = await searchHotels(
+      { destination: "London", checkIn: "2026-11-12", checkOut: "2026-11-15" },
+      {
+        apiKey: "test-key",
+        fetchFn: (async () => ({
+          ok: true,
+          status: 200,
+          json: async () => ({
+            properties: [{ name: "Http Hotel", link: "http://www.example-hotel.com/plain", rate_per_night: { extracted_lowest: 99 } }],
+          }),
+        })) as unknown as (url: string) => Promise<Response>,
+      }
+    );
+    expect(res.status).toBe("no_results");
+  });
+
+  it("treats SerpApi JSON errors on HTTP 200 as failures, not inventory", async () => {
+    const unavailable = await searchHotels(
+      { destination: "London", checkIn: "2026-11-12", checkOut: "2026-11-15" },
+      {
+        apiKey: "test-key",
+        fetchFn: (async () => ({
+          ok: true,
+          status: 200,
+          json: async () => ({ error: "Invalid API key." }),
+        })) as unknown as (url: string) => Promise<Response>,
+      }
+    );
+    expect(unavailable.status).toBe("provider_unavailable");
+    const limited = await searchHotels(
+      { destination: "London", checkIn: "2026-11-12", checkOut: "2026-11-15" },
+      {
+        apiKey: "test-key",
+        fetchFn: (async () => ({
+          ok: true,
+          status: 200,
+          json: async () => ({ error: "Rate limit exceeded, too many requests." }),
+        })) as unknown as (url: string) => Promise<Response>,
+      }
+    );
+    expect(limited.status).toBe("provider_rate_limited");
+  });
+
+  it("rejects impossible calendar dates", async () => {
+    const fetchFn = vi.fn();
+    const bad = await searchHotels(
+      { destination: "London", checkIn: "2026-02-30", checkOut: "2026-03-02" },
+      { fetchFn: fetchFn as unknown as (url: string) => Promise<Response>, apiKey: "test-key" }
+    );
+    expect(bad.status).toBe("invalid_input");
+    expect(fetchFn).not.toHaveBeenCalled();
+    expect(resolveHotelDates(["from 2026-02-30 to 2026-03-02"])).toBeNull();
+  });
+});
+
+describe("trip refinement precedence (deterministic, no LLM correction)", () => {
+  it("later nights and budget override earlier values", () => {
+    const p = extractTripParams(["London for 3 nights, budget $180", "Actually make it 4 nights and $220"]);
+    expect(p.destination).toBe("London");
+    expect(p.nights).toBe(4);
+    expect(p.budget).toContain("220");
+  });
+
+  it("revised check-in and check-out dates override earlier dates", () => {
+    const dates = resolveHotelDates(
+      ["TRIP BRIEF London 2026-11-12 to 2026-11-15", "Actually make it 2026-12-04 to 2026-12-07"],
+      new Date("2026-10-18T00:00:00Z")
+    );
+    expect(dates).toEqual({ checkIn: "2026-12-04", checkOut: "2026-12-07" });
   });
 });
 
