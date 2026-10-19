@@ -142,7 +142,7 @@ export function buildInquiryBody(input: InquiryBodyInput): string | null {
   const lines = [
     "Hello,",
     "",
-    `I am planning a stay in ${params.destination} from ${dates}${nights ? ` (${nights})` : ""}${party}${budget ? `, with a nightly budget of ${budget}` : ""}.`,
+    `I am planning a stay in ${params.destination} from ${dates}${nights ? ` (${nights})` : ""}${party}${budget ? `, with a budget of ${budget}` : ""}.`,
     "",
   ];
   const prefs = memories.slice(0, 3).map((m) => {
@@ -295,10 +295,8 @@ export async function getPendingDraft(
 
 /** iMessage preview. Exact contents, NOT SENT marker, single-use code. */
 export function formatPreviewMessage(p: Omit<DraftPreview, "code"> & { code: string | null }): string {
-  const prefLine =
-    p.preferences.length > 0
-      ? `Preferences included: ${p.preferences.join("; ")}`
-      : "Preferences included: none from memory.";
+  // The full exact email below already contains the recalled preferences,
+  // so no separate preference list is printed.
   const approvalLine = p.code
     ? `Reply SEND ${p.code} to approve this exact email. Expires ${p.expiresAt}.`
     : `Reply SEND with the code from the original preview to approve this exact email. Expires ${p.expiresAt}.`;
@@ -314,7 +312,6 @@ export function formatPreviewMessage(p: Omit<DraftPreview, "code"> & { code: str
     "",
     p.body,
     "",
-    prefLine,
     approvalLine,
     ...(partyLine ? [partyLine] : []),
   ].join("\n");

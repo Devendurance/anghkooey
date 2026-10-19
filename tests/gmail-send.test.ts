@@ -166,6 +166,19 @@ describe("inquiry content (no DB, no network)", () => {
     expect(unknown).not.toMatch(/\[dates\]|\[budget\]/);
   });
 
+  it("words budgets exactly once as with a budget of", () => {
+    const nightly = buildInquiryBody({
+      params: { ...params, budget: "$250 per night" },
+      memories: [],
+      partySize: 2,
+    });
+    expect(nightly).toContain("with a budget of $250 per night");
+    expect(nightly).not.toContain("nightly budget of");
+    expect(nightly).not.toMatch(/budget of budget/i);
+    const plain = buildInquiryBody({ params: { ...params, budget: "$220" }, memories: [], partySize: null });
+    expect(plain).toContain("with a budget of $220");
+  });
+
   it("refuses drafts without destination or dates", () => {
     expect(buildInquirySubject({ destination: null, nights: null, timing: null, budget: null })).toBeNull();
     expect(buildInquiryBody({ params: { destination: "London", nights: 4, timing: null, budget: null }, memories: [], partySize: null })).toBeNull();
@@ -176,7 +189,7 @@ describe("inquiry content (no DB, no network)", () => {
       senderEmail: "owner@gmail.com",
       to: "owner-test-inbox@example.com",
       subject: "Hotel inquiry for London",
-      body: "Hello.",
+      body: "Hello.\nPrefers quiet rooms.",
       code: "ABC123",
       expiresAt: "2026-10-18T12:30:00.000Z",
       preferences: ["prefers quiet rooms"],
@@ -184,7 +197,8 @@ describe("inquiry content (no DB, no network)", () => {
     });
     expect(out).toContain("NOT SENT");
     expect(out).toContain("SEND ABC123");
-    expect(out).toContain("Preferences included: prefers quiet rooms");
+    expect(out).toContain("Prefers quiet rooms.");
+    expect(out).not.toContain("Preferences included:");
     expect(out).not.toMatch(/refresh|ya29|1\/\/|client_secret/i);
     const noCode = formatPreviewMessage({
       senderEmail: "o@g.com",

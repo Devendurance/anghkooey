@@ -4,6 +4,7 @@ import {
   detectTripRequest,
   extractTripParams,
   isTripFollowUp,
+  normalizeBudget,
 } from "../src/server/trip-brief";
 
 const mocks = vi.hoisted(() => ({
@@ -103,6 +104,26 @@ beforeEach(() => {
   mocks.saveCalls = 0;
   mocks.recallArgs = [];
   vi.clearAllMocks();
+});
+
+describe("budget normalization (amount-first, currency preserved)", () => {
+  it("normalizes the production bug shape without repeating words", () => {
+    expect(normalizeBudget("budget to $250 per night")).toBe("$250 per night");
+    expect(normalizeBudget("budget $220/night")).toBe("$220 per night");
+    expect(normalizeBudget("budget of $250 per night")).toBe("$250 per night");
+    expect(normalizeBudget("raise my budget to $250 per night")).toBe("$250 per night");
+    expect(normalizeBudget("under £180/night")).toBe("£180 per night");
+    expect(normalizeBudget("budget 250 USD per night")).toBe("250 USD per night");
+    expect(normalizeBudget(null)).toBeNull();
+    expect(normalizeBudget("budget is tight")).toBeNull();
+  });
+
+  it("extracts normalized budgets end to end", () => {
+    expect(extractTripParams(["London for 3 nights, budget $220/night"]).budget).toBe("$220 per night");
+    expect(extractTripParams(["raise my budget to $250 per night"]).budget).toBe("$250 per night");
+    expect(extractTripParams(["under £180/night"]).budget).toBe("£180 per night");
+    expect(extractTripParams(["Help me prepare for my hotel stay"]).budget).toBeNull();
+  });
 });
 
 describe("trip intent router (deterministic, no LLM)", () => {

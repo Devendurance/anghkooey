@@ -42,7 +42,24 @@ const TIMING_RE =
   /\b(next month|next week|this weekend|this month|next (?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)|(?:january|february|march|april|may|june|july|august|september|october|november|december)(?:\s+\d{1,2}(?:st|nd|rd|th)?)?(?:\s+\d{4})?|\d{4}-\d{2}-\d{2})\b/i;
 
 const BUDGET_RE =
-  /(\$\s?[\d,]+|\b\d+\s*(?:usd|dollars?|gbp|pounds?|euros?|€|£)\b|budget[^.\n]{0,60})/i;
+  /([$£€]\s?[\d,]+(?:\s*(?:\/night|per\s*night))?|\b\d[\d,]*\s*(?:usd|dollars?|gbp|pounds?|euros?)(?:\s*(?:\/night|per\s*night))?|\b\d[\d,]*\s*(?:\/night|per\s*night)\b|budget[^.\n]{0,60})/i;
+
+/**
+ * Normalizes a raw budget hit to amount-first form ("$250 per night").
+ * Preserves the stated currency symbol or code and never converts values.
+ * Returns null when no amount is present.
+ */
+export function normalizeBudget(raw: string | null): string | null {
+  if (!raw) return null;
+  const amount = raw.match(/[\d,]+/)?.[0] ?? "";
+  if (!amount || !/\d/.test(amount)) return null;
+  const symbol = raw.match(/[$£€]/)?.[0] ?? "";
+  const code = raw.match(/\b(usd|dollars?|gbp|pounds?|euros?)\b/i)?.[1] ?? "";
+  const perNight = /per\s*night|\/night|nightly/i.test(raw);
+  if (symbol) return `${symbol}${amount}${perNight ? " per night" : ""}`;
+  if (code) return `${amount} ${code}${perNight ? " per night" : ""}`;
+  return perNight ? `${amount} per night` : amount;
+}
 
 const DEST_PATTERNS = [
   /\bTRIP BRIEF\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,2})/i,
@@ -129,7 +146,8 @@ export function extractTripParams(texts: string[]): TripParams {
   const timingHits = [...joined.matchAll(new RegExp(TIMING_RE.source, "gi"))];
   const timing = timingHits.length > 0 ? timingHits[timingHits.length - 1][1].trim().slice(0, 80) : null;
   const budgetHits = [...joined.matchAll(new RegExp(BUDGET_RE.source, "gi"))];
-  const budget = budgetHits.length > 0 ? budgetHits[budgetHits.length - 1][1].trim().slice(0, 80) : null;
+  const budgetRaw = budgetHits.length > 0 ? budgetHits[budgetHits.length - 1][1].trim().slice(0, 80) : null;
+  const budget = normalizeBudget(budgetRaw);
   return { destination, nights, timing, budget };
 }
 
