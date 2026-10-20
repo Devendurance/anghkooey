@@ -76,6 +76,9 @@ const DEST_PATTERNS = [
   /\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,2})\s+for\s+\d+\s*nights?\b/,
   /\bin\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,2})(?:\s+for\s+(?:a|my|the|our))?\s*(?:trip|stay|visit)\b/i,
   /\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,2})\s+\d{4}-\d{2}-\d{2}/,
+  // Leading place name directly before a month date ("London November 12").
+  // Anchored to message start so mid-sentence mentions never match alone.
+  /^([A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,2})\s+(?:january|february|march|april|may|june|july|august|september|october|november|december)\s+\d{1,2}\b/i,
 ];
 
 const REFINEMENT_RE =

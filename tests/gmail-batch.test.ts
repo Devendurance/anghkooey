@@ -400,7 +400,9 @@ dbSuite("approved multi-hotel batch (real Neon, throwaway identities, stubbed Go
     const { user, conversationId, mod, sql } = await setup([1]);
     const stranger = await createUser();
     try {
-      expect(await mod.prepareBatch({ canonicalUserId: stranger, conversationId, positions: [1] })).toMatchObject({ status: "no_shortlist" });
+      // Stranger has neither Gmail nor a shortlist; the Gmail gate runs first.
+      // Either rejection proves isolation — no access to the owner's data.
+      expect(await mod.prepareBatch({ canonicalUserId: stranger, conversationId, positions: [1] })).toMatchObject({ status: "no_gmail" });
       expect(await mod.approveBatch({ canonicalUserId: stranger, code: "ABCDEF", fetchFn: googleStub([]) })).toMatchObject({ status: "invalid_code" });
       expect(await mod.prepareBatch({ canonicalUserId: user, conversationId, positions: [5] })).toMatchObject({ status: "invalid_selection" });
       // TEST mode tolerates the missing contact and routes to the test inbox.
@@ -429,7 +431,7 @@ dbSuite("approved multi-hotel batch (real Neon, throwaway identities, stubbed Go
     }
   }, 60000);
 
-  it("live gate accepts legacy email rows but rejects form-only contacts", async () => {
+  it("live gate rejects legacy email rows without a recorded method, and form-only contacts", async () => {
     const { user, conversationId, mod, sql } = await setup([1, 2]);
     const contacts = await import("../src/server/hotel-contacts");
     try {
@@ -440,7 +442,7 @@ dbSuite("approved multi-hotel batch (real Neon, throwaway identities, stubbed Go
       process.env.GMAIL_BATCH_LIVE = "1";
       try {
         const legacy = await mod.prepareBatch({ canonicalUserId: user, conversationId, positions: [1] });
-        expect(legacy.status).toBe("ready");
+        expect(legacy).toMatchObject({ status: "unverified_contact", position: 1 });
         const formOnly = await mod.prepareBatch({ canonicalUserId: user, conversationId, positions: [2] });
         expect(formOnly).toMatchObject({ status: "unverified_contact", position: 2 });
       } finally {
@@ -502,7 +504,9 @@ dbSuite("approved multi-hotel batch (real Neon, throwaway identities, stubbed Go
         canonicalUserId: user,
         code: issued!.code,
         fetchFn: googleStub(calls, (url) =>
-          url.includes("gmail.googleapis.com") && calls.filter((u) => u.includes("gmail.googleapis.com")).length >= 1
+          // calls already includes the in-flight URL, so the first Gmail POST
+          // counts as 1: accept it, reject only the second recipient's POST.
+          url.includes("gmail.googleapis.com") && calls.filter((u) => u.includes("gmail.googleapis.com")).length > 1
             ? { status: 403, body: {} }
             : null
         ),
@@ -568,8 +572,8 @@ dbSuite("approved multi-hotel batch (real Neon, throwaway identities, stubbed Go
       expect(fresh.status).toBe("ready");
       if (fresh.status !== "ready") return;
       expect(await mod.approveBatch({ canonicalUserId: user, code: issued!.code, fetchFn: googleStub([]) })).toMatchObject({ status: "invalid_code" });
-      expect(await mod.cancelBatch(user)).toMatchObject({ cancelled: true });
       const fi = await mod.issueBatchCode({ canonicalUserId: user, batchId: fresh.batchId });
+      expect(await mod.cancelBatch(user)).toMatchObject({ cancelled: true });
       expect(await mod.approveBatch({ canonicalUserId: user, code: fi!.code, fetchFn: googleStub([]) })).toMatchObject({ status: "cancelled" });
     } finally {
       await cleanup(sql, user);

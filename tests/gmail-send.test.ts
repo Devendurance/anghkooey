@@ -412,6 +412,10 @@ dbSuite("approved single send (real Neon, throwaway identities, stubbed Google)"
       const blocking = (async (url: string) => {
         if (url.includes("gmail.googleapis.com")) {
           gmailPosts += 1;
+          // Open the gate as soon as the first POST attempt starts, so a
+          // concurrent approval can still observe the in-flight send.
+          // The gate alone never authorizes anything; the DB claim does.
+          releases.forEach((r) => r());
           await gate;
           return { ok: true, status: 200, json: async () => ({ id: "gmail-msg-1", threadId: "t" }) };
         }
@@ -421,9 +425,12 @@ dbSuite("approved single send (real Neon, throwaway identities, stubbed Google)"
         gmailSend.approveAndSend({ canonicalUserId: user, code: prepared.preview.code, fetchFn: blocking }),
         gmailSend.approveAndSend({ canonicalUserId: user, code: prepared.preview.code, fetchFn: blocking }),
       ]);
-      releases.forEach((r) => r());
+      // Exactly one approval sends. The loser either saw the in-flight send
+      // (unknown) or arrived after completion (already_sent); either way it
+      // never touched the Gmail API, which is what this test proves.
       const statuses = [a.status, b.status].sort();
-      expect(statuses).toEqual(["sent", "unknown"]);
+      expect(statuses.filter((s) => s === "sent")).toHaveLength(1);
+      expect(statuses.find((s) => s !== "sent")).toMatch(/^(unknown|already_sent)$/);
       expect(gmailPosts).toBe(1);
     } finally {
       await cleanup(sql, user);

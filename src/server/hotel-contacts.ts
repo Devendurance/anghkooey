@@ -146,10 +146,11 @@ export function isSameTrip(a: TripKey, b: TripKey): boolean {
  */
 export async function invalidateStaleShortlist(canonicalUserId: string, trip: TripKey): Promise<void> {
   const sql = getSql();
+  const dest = trip.destination.trim();
   await sql`
     update hotel_shortlists set status = 'stale', updated_at = now()
     where user_id = ${canonicalUserId} and status = 'active'
-      and (lower(destination) != lower(${trip.destination}) or check_in != ${trip.checkIn} or check_out != ${trip.checkOut})`;
+      and (lower(trim(both ' ' from destination)) != lower(${dest}) or check_in != ${trip.checkIn} or check_out != ${trip.checkOut})`;
 }
 
 export type ContactMethod = "email" | "form" | "phone" | "messaging";
@@ -338,7 +339,7 @@ function isPublicIPv4Bytes(n: number[]): boolean {
   if (a === 169 && b === 254) return false; // link-local
   if (a === 172 && b >= 16 && b <= 31) return false; // RFC1918
   if (a === 192 && b === 168) return false; // RFC1918
-  if (a === 192 && b === 0 && (c === 0 || c === 2)) return false; // IETF 192.0.0.0/24, TEST-NET-1
+  if (a === 192 && b === 0) return false; // IETF protocol assignments 192.0.0.0/24 (incl. TEST-NET-1)
   if (a === 192 && b === 31 && c === 196) return false; // AS112
   if (a === 192 && b === 52 && c === 193) return false; // AMT
   if (a === 192 && b === 88 && c === 99) return false; // 6to4 relay anycast (deprecated)

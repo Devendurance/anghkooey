@@ -104,14 +104,15 @@ export async function prepareBatch(args: {
 
   const picked = args.positions.map((n) => shortlist.items[n - 1]);
   // LIVE mode keeps the strict verified-email requirement: a verified
-  // reservations email on record. Legacy rows predate contact methods;
-  // those verified emails came only from email discovery. TEST mode
-  // allows missing contacts but labels them honestly and never sends to
-  // any address except the configured controlled test inbox.
+  // reservations email on record with an explicit email contact method.
+  // Legacy rows without a recorded method fail closed and can never
+  // authorize a live send. TEST mode allows missing contacts but labels
+  // them honestly and never sends to any address except the configured
+  // controlled test inbox.
   if (mode === "live") {
     for (let i = 0; i < picked.length; i++) {
       const it = picked[i];
-      const methodOk = it.contactMethod === "email" || (it.contactMethod == null && it.contactStatus === "verified");
+      const methodOk = it.contactMethod === "email";
       if (it.contactStatus !== "verified" || !it.contactEmail || !methodOk) {
         return {
           status: "unverified_contact",
@@ -245,7 +246,11 @@ export async function approveBatch(args: {
   const batch = brows[0];
   const batchId = batch.id as string;
   const mode = batch.mode as BatchMode;
-  if (new Date(batch.expires_at as string).getTime() <= Date.now()) return { status: "expired" };
+  const expired = new Date(batch.expires_at as string).getTime() <= Date.now();
+  // A cancelled batch whose window passed is simply a dead code: report it
+  // as unknown rather than implying a fresh cancellation just happened.
+  if (batch.status === "cancelled" && expired) return { status: "invalid_code" };
+  if (expired) return { status: "expired" };
   if (batch.status === "cancelled") return { status: "cancelled" };
   // A batch prepared live must never send after the live flag was removed.
   // Fail closed before consuming the code or touching any item.
@@ -386,12 +391,12 @@ export async function approveBatch(args: {
   return { status: "done", mode, consumed: true, items: results.sort((a, b) => a.position - b.position) };
 }
 
-/** Cancel the owner's pending batch. Idempotent. */
+/** Cancel the owner's pending batch. Idempotent. Expired batches count as already gone. */
 export async function cancelBatch(canonicalUserId: string): Promise<{ cancelled: boolean }> {
   const sql = getSql();
   const rows = await sql`
     update gmail_batches set status = 'cancelled', updated_at = now()
-    where user_id = ${canonicalUserId} and status = 'pending'
+    where user_id = ${canonicalUserId} and status = 'pending' and expires_at > now()
     returning id`;
   if (rows.length === 0) return { cancelled: false };
   for (const b of rows) {

@@ -481,9 +481,13 @@ export async function approveAndSend(args: {
       order by created_at desc limit 1`;
     if (prior.length === 0) return { status: "invalid_code" };
     const s = prior[0].status as string;
+    const wasExpired = new Date(prior[0].expires_at as string).getTime() <= Date.now();
     if (s === "sent") return { status: "already_sent", gmailMessageId: prior[0].gmail_message_id as string };
     if (s === "sending" || s === "unknown") return { status: "unknown", errorCode: "send_in_progress" };
-    if (s === "cancelled" || s === "superseded") return { status: "cancelled" };
+    // A cancelled draft whose window also passed is simply a dead code;
+    // report it as unknown rather than implying a fresh cancellation.
+    if (s === "cancelled") return wasExpired ? { status: "invalid_code" } : { status: "cancelled" };
+    if (s === "superseded") return { status: "invalid_code" };
     if (s === "failed") return { status: "failed", errorCode: (prior[0].error_code as string) ?? "send_failed" };
     return { status: "expired" };
   }
@@ -559,12 +563,12 @@ export async function approveAndSend(args: {
   return { status: "sent", gmailMessageId: posted.messageId };
 }
 
-/** Cancel the owner's pending draft. Idempotent. */
+/** Cancel the owner's pending draft. Idempotent. Expired drafts count as already gone. */
 export async function cancelPending(canonicalUserId: string): Promise<{ cancelled: boolean }> {
   const sql = getSql();
   const rows = await sql`
     update gmail_drafts set status = 'cancelled', updated_at = now()
-    where user_id = ${canonicalUserId} and status = 'pending'
+    where user_id = ${canonicalUserId} and status = 'pending' and expires_at > now()
     returning id`;
   return { cancelled: rows.length > 0 };
 }
