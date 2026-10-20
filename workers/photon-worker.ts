@@ -10,9 +10,7 @@ import { isHotelsCommand, parseContactCommand, type DiscoveryResult } from "../s
 import {
   approveBatch,
   cancelBatch,
-  chunkPreview,
   formatApprovalPrompt,
-  formatBatchPreview,
   formatBatchResult,
   formatBatchStatusView,
   getBatchStatus,
@@ -24,6 +22,7 @@ import {
   issueBatchCode,
   parseSendAllCommand,
   prepareBatch,
+  renderBatchPreviews,
 } from "../src/server/gmail-batch";
 import {
   approveAndSend,
@@ -438,6 +437,8 @@ async function main() {
               await message.reply("That batch approval expired. Say INQUIRE 1 to prepare a fresh batch.");
             } else if (outcome.status === "cancelled") {
               await message.reply("That batch was cancelled. Say INQUIRE 1 to start over.");
+            } else if (outcome.status === "live_disabled") {
+              await message.reply("Live sending is currently disabled, so nothing was sent. The batch is unchanged.");
             } else {
               await message.reply(formatBatchResult({ mode: outcome.mode, items: outcome.items }).slice(0, 3500));
             }
@@ -453,10 +454,10 @@ async function main() {
               if (previews.length === 0) {
                 await message.reply("No pending email batch. Say INQUIRE 1 to prepare one from your shortlist.");
               } else {
-                for (const p of previews) {
-                  for (const part of chunkPreview(formatBatchPreview({ ...p, index: p.position, total: previews.length, mode: st.mode ?? "test" }))) {
-                    await message.reply(part.slice(0, 3500));
-                  }
+                // Parts already fit iMessage limits; send them whole so no
+                // character of the approved preview can be lost in transit.
+                for (const part of renderBatchPreviews(previews, st.mode ?? "test")) {
+                  await message.reply(part);
                 }
                 await message.reply("Use the code from the original approval message to approve this exact batch.");
               }
@@ -495,12 +496,10 @@ async function main() {
             } else {
               const total = prepared.previews.length;
               try {
-                for (let i = 0; i < total; i++) {
-                  const p = prepared.previews[i];
-                  const text = formatBatchPreview({ ...p, index: i + 1, total, mode: prepared.mode });
-                  for (const part of chunkPreview(text)) {
-                    await message.reply(part.slice(0, 3500));
-                  }
+                // Every preview part must arrive intact before any approval
+                // code exists. A failed send aborts with no code issued.
+                for (const part of renderBatchPreviews(prepared.previews, prepared.mode)) {
+                  await message.reply(part);
                 }
                 const issued = await issueBatchCode({ canonicalUserId: canonical, batchId: prepared.batchId });
                 if (!issued) {

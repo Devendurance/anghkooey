@@ -204,7 +204,8 @@ export type BatchApproval =
   | { status: "done"; mode: BatchMode; consumed: boolean; items: BatchItemResult[] }
   | { status: "invalid_code" }
   | { status: "expired" }
-  | { status: "cancelled" };
+  | { status: "cancelled" }
+  | { status: "live_disabled" };
 
 /**
  * Single-use approval for the exact snapshot. Each recipient gets at most
@@ -231,6 +232,9 @@ export async function approveBatch(args: {
   const mode = batch.mode as BatchMode;
   if (new Date(batch.expires_at as string).getTime() <= Date.now()) return { status: "expired" };
   if (batch.status === "cancelled") return { status: "cancelled" };
+  // A batch prepared live must never send after the live flag was removed.
+  // Fail closed before consuming the code or touching any item.
+  if (batch.mode === "live" && getBatchMode() !== "live") return { status: "live_disabled" };
 
   let consumed = batch.status as string;
   if (consumed === "pending") {
@@ -461,18 +465,41 @@ export function formatBatchPreview(args: {
 }
 
 /** Split a preview into numbered iMessage-sized parts without truncation. */
+/**
+ * Split a preview into iMessage-sized parts. Part labels count toward
+ * the limit, so every delivered message fits and stripping the labels
+ * recovers the complete original text exactly. Nothing is truncated.
+ */
 export function chunkPreview(text: string, limit = 3500): string[] {
-  if (text.length <= limit) return [text];
-  const parts: string[] = [];
-  let rest = text;
-  let n = 0;
-  const total = Math.ceil(text.length / limit);
-  while (rest.length > 0) {
-    n += 1;
-    parts.push(`(part ${n} of ${total})\n${rest.slice(0, limit)}`);
-    rest = rest.slice(limit);
-  }
-  return parts;
+  const lim = Math.max(limit, 64);
+  if (text.length <= lim) return [text];
+  const split = (size: number): string[] => {
+    const out: string[] = [];
+    for (let at = 0; at < text.length; at += size) out.push(text.slice(at, at + size));
+    return out;
+  };
+  // Conservative first pass bounds the part count; the exact pass then
+  // sizes labels for a count that can only shrink, so every labeled part
+  // fits the limit by construction.
+  const conservative = split(lim - 32);
+  const labelLen = `(part ${conservative.length} of ${conservative.length})\n`.length;
+  const parts = split(lim - labelLen);
+  return parts.map((p, i) => `(part ${i + 1} of ${parts.length})\n${p}`);
+}
+
+/**
+ * The exact worker delivery composition: format every preview, then chunk.
+ * Tested as a whole so joining delivered parts (minus labels) always
+ * recovers every complete preview.
+ */
+export function renderBatchPreviews(previews: BatchItemPreview[], mode: BatchMode): string[] {
+  const out: string[] = [];
+  previews.forEach((p, i) => {
+    for (const part of chunkPreview(formatBatchPreview({ ...p, index: i + 1, total: previews.length, mode }))) {
+      out.push(part);
+    }
+  });
+  return out;
 }
 
 export function formatApprovalPrompt(args: { count: number; code: string; expiresAt: string; mode: BatchMode }): string {

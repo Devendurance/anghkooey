@@ -12,6 +12,7 @@ import {
   isInquireCommand,
   isPreviewAllCommand,
   parseSendAllCommand,
+  renderBatchPreviews,
 } from "../src/server/gmail-batch";
 import { buildInquiryBody, executeGmailSend, isPrepareCommand, parseSendCommand } from "../src/server/gmail-send";
 
@@ -91,13 +92,43 @@ describe("batch email content (no DB, no network)", () => {
     expect(plain).not.toContain("at Riverside");
   });
 
+  it("renders the exact worker delivery composition with every part in budget", () => {
+    const previews = [1, 2].map((i) => ({
+      position: i,
+      hotelName: `Hotel ${i}`,
+      senderEmail: "owner@gmail.com",
+      to: "owner-test-inbox@example.com",
+      subject: `Hotel inquiry ${i}`,
+      body: `${"Body text. ".repeat(400)} END${i}`,
+      contactEmail: `stay@hotel${i}-test.com`,
+      contactSourceUrl: null as string | null,
+    }));
+    const full = previews.map(
+      (p, i) => formatBatchPreview({ ...p, index: i + 1, total: previews.length, mode: "test" as const })
+    );
+    expect(full.every((f) => f.length > 3500)).toBe(true);
+    const delivered = renderBatchPreviews(previews, "test");
+    for (const part of delivered) expect(part.length).toBeLessThanOrEqual(3500);
+    for (const part of delivered) expect(part).toMatch(/^\(part \d+ of \d+\)\n/);
+    const stripped = delivered.map((p) => p.replace(/^\(part \d+ of \d+\)\n/, ""));
+    expect(stripped.join("")).toBe(full.join(""));
+    expect(stripped.join("")).toContain("END1");
+    expect(stripped.join("")).toContain("END2");
+    expect(stripped.join("")).toContain("stay@hotel2-test.com");
+  });
+
   it("splits long previews into numbered parts without truncation", () => {
     expect(chunkPreview("short")).toEqual(["short"]);
+    expect(chunkPreview("x".repeat(3500))).toHaveLength(1);
     const long = "x".repeat(8000);
     const parts = chunkPreview(long);
     expect(parts.length).toBe(3);
-    for (const p of parts) expect(p.length).toBeLessThanOrEqual(3500 + 20);
+    for (const p of parts) expect(p.length).toBeLessThanOrEqual(3500);
     expect(parts.map((p) => p.replace(/^\(part \d+ of \d+\)\n/, "")).join("")).toBe(long);
+    const longer = "y".repeat(7200);
+    const parts2 = chunkPreview(longer);
+    for (const p of parts2) expect(p.length).toBeLessThanOrEqual(3500);
+    expect(parts2.map((p) => p.replace(/^\(part \d+ of \d+\)\n/, "")).join("")).toBe(longer);
   });
 
   it("shows the exact hotel association and actual recipient on every preview", () => {
@@ -439,6 +470,52 @@ dbSuite("approved multi-hotel batch (real Neon, throwaway identities, stubbed Go
       const fi = await mod.issueBatchCode({ canonicalUserId: user, batchId: fresh.batchId });
       expect(await mod.approveBatch({ canonicalUserId: user, code: fi!.code, fetchFn: googleStub([]) })).toMatchObject({ status: "cancelled" });
     } finally {
+      await cleanup(sql, user);
+    }
+  }, 60000);
+
+  it("no approval exists before every preview is delivered", async () => {
+    const { user, conversationId, mod, sql } = await setup([1]);
+    try {
+      const prepared = await mod.prepareBatch({ canonicalUserId: user, conversationId, positions: [1] });
+      expect(prepared.status).toBe("ready");
+      if (prepared.status !== "ready") return;
+      // A delivery failure mid-preview means issueBatchCode never runs:
+      // no code exists yet, so no approval can happen.
+      expect(await mod.approveBatch({ canonicalUserId: user, code: "ABCDEF", fetchFn: googleStub([]) })).toMatchObject({
+        status: "invalid_code",
+      });
+      const status = await mod.getBatchStatus(user);
+      expect(status.found).toBe(true);
+      expect(status.status).toBe("pending");
+    } finally {
+      await cleanup(sql, user);
+    }
+  }, 60000);
+
+  it("live batch blocked after the live flag is removed sends nothing", async () => {
+    const { user, conversationId, mod, sql } = await setup([1]);
+    try {
+      process.env.GMAIL_BATCH_LIVE = "1";
+      const prepared = await mod.prepareBatch({ canonicalUserId: user, conversationId, positions: [1] });
+      expect(prepared.status).toBe("ready");
+      if (prepared.status !== "ready") return;
+      expect(prepared.mode).toBe("live");
+      expect(prepared.previews[0].to).toBe("stay@hotel1-stay.com");
+      const issued = await mod.issueBatchCode({ canonicalUserId: user, batchId: prepared.batchId });
+      delete process.env.GMAIL_BATCH_LIVE;
+      const calls: string[] = [];
+      const blocked = await mod.approveBatch({ canonicalUserId: user, code: issued!.code, fetchFn: googleStub(calls) });
+      expect(blocked).toMatchObject({ status: "live_disabled" });
+      expect(calls.filter((u) => u.includes("gmail.googleapis.com"))).toHaveLength(0);
+      const again = await mod.approveBatch({ canonicalUserId: user, code: issued!.code, fetchFn: googleStub(calls) });
+      expect(again).toMatchObject({ status: "live_disabled" });
+      expect(calls.filter((u) => u.includes("gmail.googleapis.com"))).toHaveLength(0);
+      process.env.GMAIL_BATCH_LIVE = "1";
+      const allowed = await mod.approveBatch({ canonicalUserId: user, code: issued!.code, fetchFn: googleStub(calls) });
+      expect(allowed.status).toBe("done");
+    } finally {
+      delete process.env.GMAIL_BATCH_LIVE;
       await cleanup(sql, user);
     }
   }, 60000);
