@@ -9,6 +9,7 @@
     "lint": "eslint",
     "typecheck": "next typegen && tsc --noEmit",
     "test": "vitest run",
+    "test:captions": "node --test videos/anghkooey-demo/scripts/captions.test.mjs",
     "migrate": "tsx scripts/migrate.ts",
     "check:integrations": "tsx scripts/check-integrations.ts",
     "smoke:memory": "tsx scripts/smoke-memory.ts",

@@ -64,15 +64,15 @@ describe("transport failure classification (no DB, no network)", () => {
     const tried: string[] = [];
     const transport = (async (args: { url: string; ip: string }) => {
       tried.push(args.ip);
-      if (args.ip === "203.0.113.7") throw new Error("socket hang up");
+      if (args.ip === "93.184.216.34") throw new Error("socket hang up");
       return { status: 200, headers: { "content-type": "text/html" }, body: enc("<html><body>ok</body></html>") };
     }) as never;
     const r = await fetchHtmlSafe("https://riverside-hotel.com/", {
       transport,
-      lookupFn: async () => ["203.0.113.7", "203.0.113.8"],
+      lookupFn: async () => ["93.184.216.34", "8.8.8.8"],
     });
     expect(r.html).toContain("ok");
-    expect(tried).toEqual(["203.0.113.7", "203.0.113.8"]);
+    expect(tried).toEqual(["93.184.216.34", "8.8.8.8"]);
   });
 
   it("skips non-public addresses and reports when none are usable", async () => {
@@ -292,11 +292,65 @@ describe("email extraction and hotel mention (no DB, no network)", () => {
 });
 
 describe("SSRF guards (no DB, stubbed network)", () => {
+  it("rejects credentials and non-standard ports before any network use", async () => {
+    const neverCalled = async () => {
+      throw new Error("transport must not be called");
+    };
+    await expect(
+      fetchHtmlSafe("https://user:pass@riverside-hotel.com/", {
+        transport: neverCalled as never,
+        lookupFn: lookupOk,
+      })
+    ).rejects.toMatchObject({ code: "bad_credentials" });
+    await expect(
+      fetchHtmlSafe("https://riverside-hotel.com:8443/rooms", {
+        transport: neverCalled as never,
+        lookupFn: lookupOk,
+      })
+    ).rejects.toMatchObject({ code: "bad_port" });
+    // Decimal, octal, and hex IPv4 forms normalize to loopback and are blocked.
+    for (const host of ["2130706433", "0x7f.0.0.1", "0177.0.0.1"]) {
+      expect(isBlockedHostname(new URL(`https://${host}/`).hostname)).toBe(true);
+    }
+  });
+
   it("classifies public and private addresses", () => {
-    for (const bad of ["10.0.0.1", "172.16.0.1", "172.31.255.255", "192.168.1.1", "127.0.0.1", "0.0.0.0", "169.254.169.254", "224.0.0.1", "::1", "::", "fc00::1", "fd00::1", "fe80::1", "ff02::1", "::ffff:10.0.0.1", "999.1.1.1"]) {
+    for (const bad of [
+      "10.0.0.1",
+      "172.16.0.1",
+      "172.31.255.255",
+      "192.168.1.1",
+      "127.0.0.1",
+      "0.0.0.0",
+      "169.254.169.254",
+      "224.0.0.1",
+      "100.64.0.1",
+      "100.127.255.255",
+      "192.0.2.1",
+      "198.51.100.7",
+      "203.0.113.9",
+      "192.0.0.1",
+      "198.18.0.1",
+      "192.88.99.1",
+      "::1",
+      "::",
+      "fc00::1",
+      "fd00::1",
+      "fe80::1",
+      "fea0::1",
+      "febf::1",
+      "ff02::1",
+      "2001:db8::1",
+      "2001::1",
+      "2001:10::1",
+      "2002:c000:201::",
+      "::ffff:10.0.0.1",
+      "::ffff:0.0.0.0",
+      "999.1.1.1",
+    ]) {
       expect(isPublicIp(bad)).toBe(false);
     }
-    for (const good of ["8.8.8.8", "1.1.1.1", "93.184.216.34", "2001:4860:4860::8888"]) {
+    for (const good of ["8.8.8.8", "1.1.1.1", "93.184.216.34", "2606:4700:4700::1111", "2001:4860:4860::8888"]) {
       expect(isPublicIp(good)).toBe(true);
     }
   });
@@ -359,10 +413,10 @@ describe("SSRF guards (no DB, stubbed network)", () => {
     const { transport, calls } = transportFor({ "https://pinned.example.com/": { body: "<html><body>ok</body></html>" } });
     const ok = await fetchHtmlSafe("https://pinned.example.com/", {
       transport,
-      lookupFn: async () => ["203.0.113.7"],
+      lookupFn: async () => ["93.184.216.34"],
     });
     expect(ok.html).toContain("ok");
-    expect(calls).toEqual(["https://pinned.example.com/ via 203.0.113.7"]);
+    expect(calls).toEqual(["https://pinned.example.com/ via 93.184.216.34"]);
   });
 
   it("validates every redirect hop and caps the chain", async () => {
@@ -490,7 +544,7 @@ describe("contact discovery honesty (stubbed pages)", () => {
     const tried: string[] = [];
     const transport = (async (args: { url: string; ip: string }) => {
       tried.push(args.ip);
-      if (args.ip === "203.0.113.7") {
+      if (args.ip === "93.184.216.34") {
         const err = new Error("socket hang up") as Error & { code?: string };
         err.code = "ECONNREFUSED";
         throw err;
@@ -499,10 +553,10 @@ describe("contact discovery honesty (stubbed pages)", () => {
     }) as never;
     const r = await discoverHotelContact(
       { name: "Riverside Hotel", sourceUrl: "https://riverside-hotel.com/rooms" },
-      { transport, lookupFn: async () => ["203.0.113.7", "203.0.113.8"] }
+      { transport, lookupFn: async () => ["93.184.216.34", "8.8.8.8"] }
     );
     expect(r).toMatchObject({ status: "verified", email: "stay@riverside-hotel.com" });
-    expect(tried).toEqual(["203.0.113.7", "203.0.113.8"]);
+    expect(tried).toEqual(["93.184.216.34", "8.8.8.8"]);
   });
 
   it("maps blocked, rate-limited, and provider errors distinctly", async () => {
@@ -741,7 +795,8 @@ describe("shortlist presentation (no DB, no network)", () => {
         result: { ...full, method: "form", formUrl: "https://riverside-hotel.com/contact", email: null },
       },
     ]);
-    expect(formMsg).toContain("Official contact form found");
+    expect(formMsg).toContain("Official contact form: https://riverside-hotel.com/contact");
+    expect(formMsg).toContain("not an email address");
     expect(formMsg).not.toContain("stay@riverside-hotel.com");
     const phoneMsg = formatContactResults(view, [
       {
@@ -760,6 +815,16 @@ describe("shortlist presentation (no DB, no network)", () => {
     ]);
     expect(retryMsg).toContain("The website timed out. Try CONTACT 1 again.");
     expect(retryMsg).not.toMatch(/couldn't be checked \(/);
+    // The generic fallback note must also render exactly once, never doubled.
+    const genericRetry = formatContactResults(view, [
+      {
+        position: 2,
+        name: "Garden Inn",
+        result: { ...missing, status: "incomplete", note: "The website couldn't be checked.", retryable: true },
+      },
+    ]);
+    expect(genericRetry).toContain("The website couldn't be checked. Try CONTACT 2 again.");
+    expect(genericRetry.match(/couldn't be checked/g) ?? []).toHaveLength(1);
   });
 
   it("gates selections on active status and future dates", () => {

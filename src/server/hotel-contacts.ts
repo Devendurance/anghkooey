@@ -260,7 +260,10 @@ export function formatContactResults(
       const scope = d.tier === "central" ? "Central reservations" : "Reservations";
       lines.push(`${r.position}. ${r.name} — ${scope} email verified: ${d.email}${via}.`);
     } else if (d.status === "verified" && d.method === "form" && d.formUrl) {
-      lines.push(`${r.position}. ${r.name} — Official contact form found${via}. This is not an email address.`);
+      // Show the full validated URL so it is tappable in iMessage. The URL
+      // was extracted from the hotel's own page and re-checked same-host;
+      // it is never guessed and never submitted to automatically.
+      lines.push(`${r.position}. ${r.name} — Official contact form: ${d.formUrl} (not an email address; nothing was sent).`);
     } else if (d.status === "verified" && d.method === "phone" && d.phone) {
       lines.push(`${r.position}. ${r.name} — Hotel phone number verified: ${d.phone}${via}.`);
     } else if (d.status === "verified" && d.method === "messaging" && d.messagingUrl) {
@@ -287,30 +290,96 @@ export class SafeFetchError extends Error {
   }
 }
 
-export function isPublicIp(ip: string): boolean {
-  const v4 = ip.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
-  if (v4) {
-    const n = v4.slice(1).map(Number);
-    if (n.some((x) => x > 255)) return false;
-    const [a, b] = n;
-    if (a === 10 || a === 127 || a === 0) return false;
-    if (a === 172 && b >= 16 && b <= 31) return false;
-    if (a === 192 && b === 168) return false;
-    if (a === 169 && b === 254) return false;
-    if (a >= 224) return false;
-    return true;
+function parseIPv4(s: string): number[] | null {
+  const m = s.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+  if (!m) return null;
+  const n = m.slice(1).map(Number);
+  if (n.some((x) => x > 255)) return null;
+  return n;
+}
+
+/** Expands any textual IPv6 form (compressed, zone id, embedded IPv4) to 8 hextets. */
+function expandIPv6(ip: string): number[] | null {
+  let s = ip.toLowerCase().split("%")[0];
+  let tail: number[] = [];
+  const v4m = s.match(/^(.*:)(\d+\.\d+\.\d+\.\d+)$/);
+  if (v4m) {
+    const v4 = parseIPv4(v4m[2]);
+    if (!v4) return null;
+    tail = [(v4[0] << 8) | v4[1], (v4[2] << 8) | v4[3]];
+    s = v4m[1];
   }
-  const bare = ip.toLowerCase().split("%")[0];
-  const mapped = bare.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/);
-  if (mapped) return isPublicIp(mapped[1]);
-  if (bare === "::1" || bare === "::") return false;
-  if (/^f[cd]/i.test(bare)) return false; // fc00::/7 unique-local
-  if (/^fe[89ab]/i.test(bare.replace(/:/g, "").slice(0, 4))) return false; // fe80::/10 link-local
-  if (/^ff/i.test(bare)) return false; // multicast
-  if (/^2001:0?db8:/i.test(bare)) return false; // documentation
-  const first = parseInt(bare.split(":")[0] || "0", 16);
-  if (Number.isNaN(first)) return false;
-  return first >= 0x2000 && first <= 0x3fff; // global unicast only
+  if (!/^[0-9a-f:]*$/.test(s)) return null;
+  const halves = s.split("::");
+  if (halves.length > 2) return null;
+  const left = halves[0] ? halves[0].split(":").filter((g) => g !== "") : [];
+  const right = halves.length === 2 && halves[1] ? halves[1].split(":").filter((g) => g !== "") : [];
+  for (const g of [...left, ...right]) {
+    if (!/^[0-9a-f]{1,4}$/.test(g)) return null;
+  }
+  const missing = 8 - tail.length - left.length - right.length;
+  if (halves.length === 1 && missing !== 0) return null;
+  // "::" must actually compress at least one group.
+  if (halves.length === 2 && missing <= 0) return null;
+  const groups = [
+    ...left.map((g) => parseInt(g, 16)),
+    ...new Array(Math.max(0, missing)).fill(0),
+    ...right.map((g) => parseInt(g, 16)),
+    ...tail,
+  ];
+  if (groups.length !== 8 || groups.some((x) => Number.isNaN(x) || x < 0 || x > 0xffff)) return null;
+  return groups;
+}
+
+function isPublicIPv4Bytes(n: number[]): boolean {
+  const [a, b, c] = n;
+  if (a === 10 || a === 127 || a === 0) return false; // RFC1918, loopback, "this host"
+  if (a === 100 && b >= 64 && b <= 127) return false; // CGNAT 100.64.0.0/10
+  if (a === 169 && b === 254) return false; // link-local
+  if (a === 172 && b >= 16 && b <= 31) return false; // RFC1918
+  if (a === 192 && b === 168) return false; // RFC1918
+  if (a === 192 && b === 0 && (c === 0 || c === 2)) return false; // IETF 192.0.0.0/24, TEST-NET-1
+  if (a === 192 && b === 31 && c === 196) return false; // AS112
+  if (a === 192 && b === 52 && c === 193) return false; // AMT
+  if (a === 192 && b === 88 && c === 99) return false; // 6to4 relay anycast (deprecated)
+  if (a === 192 && b === 175 && c === 48) return false; // direct delegation
+  if (a === 198 && b >= 18 && b <= 19) return false; // benchmarking 198.18.0.0/15
+  if (a === 198 && b === 51 && c === 100) return false; // TEST-NET-2
+  if (a === 203 && b === 0 && c === 113) return false; // TEST-NET-3
+  if (a >= 224) return false; // multicast + reserved
+  return true;
+}
+
+function isPublicIPv6Groups(g: number[]): boolean {
+  const [h0, h1] = g;
+  if (g.every((x) => x === 0)) return false; // ::/128 unspecified
+  if (h0 === 0 && h1 === 0) {
+    // First 32 bits zero: only ::ffff:0:0/96 forms reach here; route the
+    // embedded IPv4 through the IPv4 checks.
+    if (g[2] === 0xffff) {
+      return isPublicIPv4Bytes([(g[3] >> 8) & 255, g[3] & 255, (g[4] >> 8) & 255, g[4] & 255]);
+    }
+    return false;
+  }
+  if ((h0 & 0xffc0) === 0xfe80) return false; // fe80::/10 link-local
+  if ((h0 & 0xfe00) === 0xfc00) return false; // fc00::/7 unique-local
+  if ((h0 & 0xff00) === 0xff00) return false; // ff00::/8 multicast
+  if (h0 === 0x2001 && h1 === 0x0db8) return false; // documentation 2001:db8::/32
+  if (h0 === 0x2001 && h1 === 0x0000) return false; // TEREDO 2001::/32
+  if (h0 === 0x2001 && (h1 & 0xfff0) === 0x0010) return false; // ORCHIDv2 2001:10::/28
+  if (h0 === 0x2002) return false; // 6to4 2002::/16 transition
+  if (h0 === 0x0064 && h1 === 0xff9b) return false; // NAT64 64:ff9b::/96
+  if (h0 === 0x0100) return false; // discard 100::/64
+  return (h0 & 0xe000) === 0x2000; // global unicast 2000::/3 only
+}
+
+export function isPublicIp(ip: string): boolean {
+  const v4 = parseIPv4(ip.trim());
+  if (v4) return isPublicIPv4Bytes(v4);
+  // IPv6 (zone id stripped by the expander). Anything unparseable fails closed.
+  const v6 = expandIPv6(ip.trim());
+  if (!v6) return false;
+  return isPublicIPv6Groups(v6);
 }
 
 export function isBlockedHostname(host: string): boolean {
@@ -478,6 +547,10 @@ export async function fetchHtmlSafe(startUrl: string, opts: SafeFetchOpts = {}):
       throw new SafeFetchError("bad_url");
     }
     if (u.protocol !== "https:") throw new SafeFetchError("not_https");
+    if (u.username || u.password) throw new SafeFetchError("bad_credentials");
+    // Hotel pages live on 443. Non-standard ports are not expected and
+    // keep ambiguous endpoints out of scope.
+    if (u.port !== "" && u.port !== "443") throw new SafeFetchError("bad_port");
     if (isBlockedHostname(u.hostname)) throw new SafeFetchError("blocked_host");
     let addrs: string[];
     try {
@@ -1175,7 +1248,9 @@ export async function diagnoseHotelUrl(
                       ? ("too_large" as const)
                       : code === "transport_config"
                         ? ("transport_config" as const)
-                        : ("connection_failed" as const);
+                        : code === "bad_credentials" || code === "bad_port"
+                          ? ("blocked" as const)
+                          : ("connection_failed" as const);
     checks.push({ name: "fetch", ok: false, code, latencyMs: Date.now() - fetchStart });
     return fail(verdict, host, none);
   }
