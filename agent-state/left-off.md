@@ -1,5 +1,5 @@
 # Current checkpoint
-- Task: Gmail-D lossless preview and live-gate fix complete and verified, ready to commit.
-- Done: label-aware chunking with exact reassembly, renderBatchPreviews delivery composition, mid-preview failure issues no code, live recheck blocks sends after flag removal, CONTACT copy fixed. New tests pass. Typecheck, eslint, build pass; 122 passed 26 skipped across 9 suites.
-- Next: commit and push, then owner sets GMAIL_SEND_TEST_TO, runs migrate 007, pulls both hosts, restarts worker, runs controlled live batch test. Untested here: real Gmail API, DB paths, live iMessage flow.
-- Evidence limits: stubbed Google fetch, static checks only. No live email sent. No credentials in repo.
+- Task: Gmail-D test-mode unblock and contact diagnostics complete and verified, ready to commit.
+- Done: TEST batches prepare without verified contacts with honest labeling, execution-time recipient revalidation against the controlled inbox, [TEST] subjects, classified transport errors with validated-IP failover, redirect-to-platform rejection. New tests pass. Typecheck, eslint, build pass; 202 passed 31 skipped across 22 suites (videos pre-existing failure unrelated).
+- Next: commit and push, then owner pulls both hosts, restarts worker, runs the INQUIRE 1,2 live test. Untested here: real Gmail API, real page fetches, DB paths, live iMessage flow.
+- Evidence limits: stubbed transport/DNS/Google, static checks only. No live email sent. No credentials in repo.

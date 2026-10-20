@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  classifyTransportError,
   discoverHotelContact,
   extractEmails,
   fetchHtmlSafe,
@@ -34,6 +35,72 @@ const transportFor = (pages: Record<string, StubPage>, calls: string[] = []) => 
   };
   return { transport: t as never, calls };
 };
+
+describe("transport failure classification (no DB, no network)", () => {
+  it("distinguishes timeout, connection, TLS, and generic failures", () => {
+    expect(classifyTransportError(Object.assign(new Error("socket hang up"), { code: "ECONNREFUSED" }))).toBe("connection_failed");
+    expect(classifyTransportError(Object.assign(new Error("getaddrinfo ENOTFOUND x"), { code: "ENOTFOUND" }))).toBe("connection_failed");
+    expect(classifyTransportError(Object.assign(new Error("certificate has expired"), { code: "UNABLE_TO_VERIFY_LEAF_SIGNATURE" }))).toBe("tls_failed");
+    expect(classifyTransportError(Object.assign(new Error("write EPROTO"), { code: "ERR_TLS_CERT_ALTNAME_INVALID" }))).toBe("tls_failed");
+    expect(classifyTransportError(Object.assign(new Error("Timeout"), { code: "ETIMEDOUT" }))).toBe("connection_failed");
+    expect(classifyTransportError(new Error("operation timed out"))).toBe("timeout");
+    expect(classifyTransportError(new Error("socket hang up"))).toBe("fetch_failed");
+    expect(classifyTransportError(new Error("whatever"))).toBe("fetch_failed");
+  });
+
+  it("fails over to the next validated public address on connection failure", async () => {
+    const tried: string[] = [];
+    const transport = (async (args: { url: string; ip: string }) => {
+      tried.push(args.ip);
+      if (args.ip === "203.0.113.7") throw new Error("socket hang up");
+      return { status: 200, headers: { "content-type": "text/html" }, body: enc("<html><body>ok</body></html>") };
+    }) as never;
+    const r = await fetchHtmlSafe("https://riverside-hotel.com/", {
+      transport,
+      lookupFn: async () => ["203.0.113.7", "203.0.113.8"],
+    });
+    expect(r.html).toContain("ok");
+    expect(tried).toEqual(["203.0.113.7", "203.0.113.8"]);
+  });
+
+  it("skips non-public addresses and reports when none are usable", async () => {
+    const { transport, calls } = transportFor({ "https://riverside-hotel.com/": { body: "<html><body>ok</body></html>" } });
+    const r = await fetchHtmlSafe("https://riverside-hotel.com/", {
+      transport,
+      lookupFn: async () => ["10.0.0.9", PUBLIC_IP],
+    });
+    expect(r.html).toContain("ok");
+    expect(calls).toEqual([`https://riverside-hotel.com/ via ${PUBLIC_IP}`]);
+    await expect(
+      fetchHtmlSafe("https://riverside-hotel.com/", {
+        transport,
+        lookupFn: async () => ["10.0.0.9", "192.168.1.4"],
+      })
+    ).rejects.toMatchObject({ code: "private_ip" });
+    expect(calls).toHaveLength(1);
+  });
+
+  it("maps blocked, limited, and failed origins to distinct codes", async () => {
+    const pages: Record<string, StubPage> = {
+      "https://w.example.com/deny": { status: 403, body: "x" },
+      "https://w.example.com/rate": { status: 429, body: "x" },
+      "https://w.example.com/down": { status: 503, body: "x" },
+    };
+    for (const [url, code] of [
+      ["https://w.example.com/deny", "blocked_page"],
+      ["https://w.example.com/rate", "rate_limited"],
+      ["https://w.example.com/down", "provider_error"],
+    ] as const) {
+      await expect(fetchHtmlSafe(url, { transport: transportFor(pages).transport, lookupFn: lookupOk })).rejects.toMatchObject({ code });
+    }
+    const d = await discoverHotelContact(
+      { name: "Riverside Hotel", sourceUrl: "https://w.example.com/rate" },
+      { transport: transportFor(pages).transport, lookupFn: lookupOk }
+    );
+    expect(d).toMatchObject({ status: "incomplete", email: null });
+    expect(d.note).toContain("rate_limited");
+  });
+});
 
 describe("hotel selection commands (no DB, no network)", () => {
   it("parses CONTACT selections strictly", () => {

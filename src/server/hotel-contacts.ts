@@ -191,7 +191,7 @@ export function parseContactCommand(text: string): number[] | null {
   return distinct.sort((a, b) => a - b);
 }
 
-function shortDomain(raw: string): string {
+export function shortDomain(raw: string): string {
   try {
     return new URL(raw).hostname.toLowerCase().replace(/^www\./, "");
   } catch {
@@ -361,10 +361,34 @@ async function defaultPinnedTransport(args: {
         res.on("error", fail);
       }
     );
-    req.on("timeout", () => req.destroy(new SafeFetchError("fetch_failed")));
-    req.on("error", reject);
+    req.on("timeout", () => req.destroy(new SafeFetchError("timeout")));
+    req.on("error", (e: unknown) => reject(new SafeFetchError(classifyTransportError(e))));
     req.end();
   });
+}
+
+/**
+ * Sanitized network failure classes. TLS and connection problems are
+ * distinguished so contact diagnostics never collapse into a generic
+ * fetch error. Never includes hostnames, URLs, or response bodies.
+ */
+export function classifyTransportError(e: unknown): "timeout" | "connection_failed" | "tls_failed" | "fetch_failed" {
+  if (e instanceof SafeFetchError) {
+    if (e.code === "timeout" || e.code === "connection_failed" || e.code === "tls_failed") return e.code;
+    return "fetch_failed";
+  }
+  const code = (e as NodeJS.ErrnoException | null)?.code ?? "";
+  const text = `${code} ${(e as Error)?.message ?? ""}`;
+  if (/^ERR_TLS|^CERT_|UNABLE_TO_VERIFY|certificate|handshake|\bSSL\b/i.test(text)) return "tls_failed";
+  if (
+    ["ECONNREFUSED", "ENOTFOUND", "EHOSTUNREACH", "EHOSTDOWN", "ENETUNREACH", "EPIPE", "ECONNRESET", "EAI_AGAIN", "ETIMEDOUT"].includes(
+      code
+    )
+  ) {
+    return "connection_failed";
+  }
+  if (/timed?\s*out|timeout|abort/i.test(text)) return "timeout";
+  return "fetch_failed";
 }
 
 /** HTTPS-only page fetch with DNS, redirect, size, and type guards. Never executes scripts. */
@@ -389,23 +413,33 @@ export async function fetchHtmlSafe(startUrl: string, opts: SafeFetchOpts = {}):
     } catch {
       throw new SafeFetchError("dns_failed");
     }
-    if (addrs.length === 0 || !addrs.every(isPublicIp)) throw new SafeFetchError("private_ip");
-    // Pin the connection to a validated address. The transport must dial
-    // exactly this IP while keeping TLS verification and Host tied to the
-    // real hostname, so a changed DNS answer mid-request cannot reroute it.
-    const ip = addrs[0];
-    let res: PinnedTransportResult;
-    try {
-      res = await transport({
-        url,
-        ip,
-        timeoutMs: opts.timeoutMs ?? FETCH_TIMEOUT_MS,
-        headers: { "user-agent": "AnghkooeyContactBot/1.0", accept: "text/html" },
-      });
-    } catch (e) {
-      if (e instanceof SafeFetchError) throw e;
-      throw new SafeFetchError("fetch_failed");
+    // Resolve and validate on every hop, then pin the connection to a
+    // validated address, failing over across validated public addresses
+    // only on connection-level errors. HTTP responses are authoritative
+    // from the first host that answers.
+    const publicAddrs = addrs.filter(isPublicIp);
+    if (publicAddrs.length === 0) throw new SafeFetchError("private_ip");
+    let res: PinnedTransportResult | null = null;
+    let lastErr: unknown = null;
+    for (const ip of publicAddrs.slice(0, 3)) {
+      try {
+        res = await transport({
+          url,
+          ip,
+          timeoutMs: opts.timeoutMs ?? FETCH_TIMEOUT_MS,
+          headers: { "user-agent": "AnghkooeyContactBot/1.0", accept: "text/html" },
+        });
+        break;
+      } catch (e) {
+        const se = e instanceof SafeFetchError ? e : new SafeFetchError("fetch_failed");
+        if (se.code === "fetch_failed" || se.code === "timeout" || se.code === "connection_failed" || se.code === "tls_failed") {
+          lastErr = se;
+          continue;
+        }
+        throw se;
+      }
     }
+    if (!res) throw lastErr instanceof Error ? lastErr : new SafeFetchError("fetch_failed");
     if (res.body.byteLength > maxBytes) throw new SafeFetchError("too_large");
     if (res.status >= 300 && res.status < 400) {
       const loc = res.headers.location;
@@ -413,6 +447,9 @@ export async function fetchHtmlSafe(startUrl: string, opts: SafeFetchOpts = {}):
       url = new URL(loc, url).toString();
       continue;
     }
+    if (res.status === 401 || res.status === 403) throw new SafeFetchError("blocked_page");
+    if (res.status === 429) throw new SafeFetchError("rate_limited");
+    if (res.status >= 500) throw new SafeFetchError("provider_error");
     if (res.status < 200 || res.status >= 300) throw new SafeFetchError("bad_status");
     const contentType = res.headers["content-type"] ?? "";
     if (!contentType.includes("text/html")) throw new SafeFetchError("not_html");

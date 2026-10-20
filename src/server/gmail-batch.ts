@@ -10,7 +10,7 @@ import {
   sendTestInbox,
 } from "./gmail-send";
 import type { FetchFn } from "./gmail";
-import { getActiveShortlist, isShortlistUsable } from "./hotel-contacts";
+import { getActiveShortlist, isShortlistUsable, shortDomain } from "./hotel-contacts";
 
 const BATCH_TTL_MINUTES = 30;
 const MAX_ITEMS = 3;
@@ -65,6 +65,8 @@ export type BatchItemPreview = {
   body: string;
   contactEmail: string | null;
   contactSourceUrl: string | null;
+  contactVerified: boolean;
+  contactNote: string | null;
 };
 
 export type PrepareBatchResult =
@@ -101,15 +103,20 @@ export async function prepareBatch(args: {
   }
 
   const picked = args.positions.map((n) => shortlist.items[n - 1]);
-  for (let i = 0; i < picked.length; i++) {
-    const it = picked[i];
-    if (it.contactStatus !== "verified" || !it.contactEmail) {
-      return {
-        status: "unverified_contact",
-        position: it.position,
-        hotelName: it.name,
-        reason: it.contactNote ?? "No verified contact email on file for this hotel.",
-      };
+  // LIVE mode keeps the strict verified-contact requirement. TEST mode
+  // allows missing contacts but labels them honestly and never sends to
+  // any address except the configured controlled test inbox.
+  if (mode === "live") {
+    for (let i = 0; i < picked.length; i++) {
+      const it = picked[i];
+      if (it.contactStatus !== "verified" || !it.contactEmail) {
+        return {
+          status: "unverified_contact",
+          position: it.position,
+          hotelName: it.name,
+          reason: it.contactNote ?? "No verified contact email on file for this hotel.",
+        };
+      }
     }
   }
 
@@ -128,9 +135,12 @@ export async function prepareBatch(args: {
 
   const drafts = picked.map((it) => {
     const to = mode === "test" ? (testInbox as string) : (it.contactEmail as string);
-    const subject = buildInquirySubject(effectiveParams);
+    const rawSubject = buildInquirySubject(effectiveParams);
+    // Controlled tests must be unmistakable as tests, never real inquiries.
+    const subject = rawSubject && mode === "test" ? `[TEST] ${rawSubject}` : rawSubject;
     const body = buildInquiryBody({ params: effectiveParams, memories, partySize, hotelName: it.name });
-    return { item: it, to, subject, body };
+    const verified = it.contactStatus === "verified" && Boolean(it.contactEmail);
+    return { item: it, to, subject, body, verified };
   });
   if (drafts.some((d) => !d.subject || !d.body)) {
     return { status: "need_info", missing: ["exact check-in and check-out dates"] };
@@ -173,6 +183,8 @@ export async function prepareBatch(args: {
       body: d.body as string,
       contactEmail: d.item.contactEmail,
       contactSourceUrl: d.item.contactSourceUrl,
+      contactVerified: d.verified,
+      contactNote: d.item.contactNote,
     })),
   };
 }
@@ -311,6 +323,30 @@ export async function approveBatch(args: {
       await fail("no_gmail");
       continue;
     }
+    // Revalidate the recipient immediately before sending. TEST batches
+    // may only ever go to the configured controlled inbox, even if the
+    // live flag changed after preparation. LIVE batches may only go to
+    // the verified contact stored for that exact item. Fail closed.
+    if (mode === "test") {
+      let expected: string;
+      try {
+        expected = sendTestInbox();
+      } catch {
+        await fail("not_configured");
+        continue;
+      }
+      if (to.toLowerCase() !== expected.toLowerCase()) {
+        await fail("recipient_mismatch");
+        continue;
+      }
+    } else {
+      const cur = await sql`select contact_email from gmail_batch_items where id = ${row.id}`;
+      const onRecord = cur[0]?.contact_email as string | null;
+      if (!onRecord || to.toLowerCase() !== onRecord.toLowerCase()) {
+        await fail("recipient_mismatch");
+        continue;
+      }
+    }
     const posted = await executeGmailSend({
       refreshToken: creds.refreshToken,
       from: creds.email,
@@ -376,7 +412,21 @@ export async function getPendingBatchPreviews(canonicalUserId: string): Promise<
     from gmail_batch_items where batch_id = ${brows[0].id as string} and status = 'pending'
     order by position asc`;
   const out: BatchItemPreview[] = [];
+  const shortlistId = (
+    await sql`select shortlist_id from gmail_batches where id = ${brows[0].id as string}`
+  )[0]?.shortlist_id as string | undefined;
   for (const r of items) {
+    let contactVerified = Boolean(r.contact_email);
+    let contactNote: string | null = null;
+    if (shortlistId) {
+      const srows = await sql`
+        select contact_status, contact_note from hotel_shortlist_items
+        where shortlist_id = ${shortlistId} and position = ${r.position}`.catch(() => []);
+      if (srows.length > 0) {
+        contactVerified = srows[0].contact_status === "verified" && Boolean(r.contact_email);
+        contactNote = (srows[0].contact_note as string | null) ?? null;
+      }
+    }
     try {
       out.push({
         position: r.position as number,
@@ -387,6 +437,8 @@ export async function getPendingBatchPreviews(canonicalUserId: string): Promise<
         body: decryptForUser(r.enc_body as string, canonicalUserId, "gmail-batch"),
         contactEmail: (r.contact_email as string | null) ?? null,
         contactSourceUrl: (r.contact_source_url as string | null) ?? null,
+        contactVerified,
+        contactNote,
       });
     } catch {
       return [];
@@ -442,26 +494,22 @@ export function formatBatchPreview(args: {
   body: string;
   contactEmail: string | null;
   contactSourceUrl: string | null;
+  contactVerified: boolean;
+  contactNote: string | null;
   mode: BatchMode;
 }): string {
   const assoc =
     args.mode === "test"
       ? `To: ${args.to} (test inbox for ${args.hotelName})`
       : `To: ${args.to} (for ${args.hotelName})`;
-  const evidence =
-    args.contactEmail && args.contactSourceUrl
-      ? `Verified contact: ${args.contactEmail} (via ${args.contactSourceUrl})`
-      : `Verified contact: ${args.contactEmail ?? "on file"}`;
-  return [
-    `Email ${args.index} of ${args.total} — NOT SENT.`,
-    `From: ${args.senderEmail}`,
-    assoc,
-    `Subject: ${args.subject}`,
-    "",
-    args.body,
-    "",
-    evidence,
-  ].join("\n");
+  const evidence = args.contactVerified && args.contactEmail
+    ? `Hotel contact (verified): ${args.contactEmail} (via ${shortDomain(args.contactSourceUrl ?? args.to)})`
+    : `Hotel contact: not verified${args.contactNote ? ` (${args.contactNote})` : ""}. This email goes only to the controlled test inbox.`;
+  const header =
+    args.mode === "test"
+      ? `TEST EMAIL ${args.index} of ${args.total} — NOT SENT (controlled test, not a real hotel inquiry).`
+      : `Email ${args.index} of ${args.total} — NOT SENT.`;
+  return [header, `From: ${args.senderEmail}`, assoc, `Subject: ${args.subject}`, "", args.body, "", evidence].join("\n");
 }
 
 /** Split a preview into numbered iMessage-sized parts without truncation. */

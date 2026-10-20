@@ -102,6 +102,8 @@ describe("batch email content (no DB, no network)", () => {
       body: `${"Body text. ".repeat(400)} END${i}`,
       contactEmail: `stay@hotel${i}-test.com`,
       contactSourceUrl: null as string | null,
+      contactVerified: false,
+      contactNote: null as string | null,
     }));
     const full = previews.map(
       (p, i) => formatBatchPreview({ ...p, index: i + 1, total: previews.length, mode: "test" as const })
@@ -114,7 +116,23 @@ describe("batch email content (no DB, no network)", () => {
     expect(stripped.join("")).toBe(full.join(""));
     expect(stripped.join("")).toContain("END1");
     expect(stripped.join("")).toContain("END2");
-    expect(stripped.join("")).toContain("stay@hotel2-test.com");
+    expect(stripped.join("")).toContain("Hotel contact: not verified");
+    expect(stripped.join("")).not.toContain("stay@hotel2-test.com");
+    const verified = formatBatchPreview({
+      index: 1,
+      total: 1,
+      hotelName: "Hotel 1",
+      senderEmail: "owner@gmail.com",
+      to: "owner-test-inbox@example.com",
+      subject: "s",
+      body: "b",
+      contactEmail: "stay@hotel1-test.com",
+      contactSourceUrl: "https://hotel1.example.com/contact",
+      contactVerified: true,
+      contactNote: null,
+      mode: "test",
+    });
+    expect(verified).toContain("Hotel contact (verified): stay@hotel1-test.com");
   });
 
   it("splits long previews into numbered parts without truncation", () => {
@@ -138,17 +156,22 @@ describe("batch email content (no DB, no network)", () => {
       hotelName: "Riverside Hotel",
       senderEmail: "owner@gmail.com",
       to: "owner-test-inbox@example.com",
-      subject: "Hotel inquiry for London",
+      subject: "[TEST] Hotel inquiry for London",
       body: "Hello.\nFull body here.",
-      contactEmail: "stay@riverside-hotel.com",
-      contactSourceUrl: "https://riverside-hotel.com/contact",
+      contactEmail: null,
+      contactSourceUrl: null,
+      contactVerified: false,
+      contactNote: "No public contact email found on the hotel page.",
       mode: "test",
     });
-    expect(out).toContain("Email 1 of 2 — NOT SENT");
+    expect(out).toContain("TEST EMAIL 1 of 2 — NOT SENT");
+    expect(out).toContain("controlled test, not a real hotel inquiry");
     expect(out).toContain("From: owner@gmail.com");
     expect(out).toContain("To: owner-test-inbox@example.com (test inbox for Riverside Hotel)");
+    expect(out).toContain("[TEST] Hotel inquiry for London");
     expect(out).toContain("Full body here.");
-    expect(out).toContain("stay@riverside-hotel.com");
+    expect(out).toContain("Hotel contact: not verified (No public contact email found on the hotel page.)");
+    expect(out).not.toMatch(/\[TEST\].*\[TEST\]/);
     expect(out).not.toContain("Preferences included:");
   });
 
@@ -372,7 +395,7 @@ dbSuite("approved multi-hotel batch (real Neon, throwaway identities, stubbed Go
     }
   }, 60000);
 
-  it("rejects wrong identity, unusable shortlists, and unverified contacts", async () => {
+  it("rejects wrong identity, unusable shortlists, and unverified contacts in live mode", async () => {
     const { createUser } = await import("../src/server/session");
     const { user, conversationId, mod, sql } = await setup([1]);
     const stranger = await createUser();
@@ -380,7 +403,26 @@ dbSuite("approved multi-hotel batch (real Neon, throwaway identities, stubbed Go
       expect(await mod.prepareBatch({ canonicalUserId: stranger, conversationId, positions: [1] })).toMatchObject({ status: "no_shortlist" });
       expect(await mod.approveBatch({ canonicalUserId: stranger, code: "ABCDEF", fetchFn: googleStub([]) })).toMatchObject({ status: "invalid_code" });
       expect(await mod.prepareBatch({ canonicalUserId: user, conversationId, positions: [5] })).toMatchObject({ status: "invalid_selection" });
-      expect(await mod.prepareBatch({ canonicalUserId: user, conversationId, positions: [2] })).toMatchObject({ status: "unverified_contact", position: 2 });
+      // TEST mode tolerates the missing contact and routes to the test inbox.
+      const permissive = await mod.prepareBatch({ canonicalUserId: user, conversationId, positions: [2] });
+      expect(permissive.status).toBe("ready");
+      if (permissive.status !== "ready") return;
+      expect(permissive.previews[0].to).toBe(process.env.GMAIL_SEND_TEST_TO);
+      expect(permissive.previews[0].subject.startsWith("[TEST] ")).toBe(true);
+      const { formatBatchPreview } = mod;
+      const shown = formatBatchPreview({ ...permissive.previews[0], index: 1, total: 1, mode: "test" });
+      expect(shown).toContain("TEST EMAIL 1 of 1");
+      expect(shown).toContain("Hotel contact: not verified");
+      // LIVE mode keeps the strict verified-contact gate.
+      process.env.GMAIL_BATCH_LIVE = "1";
+      try {
+        expect(await mod.prepareBatch({ canonicalUserId: user, conversationId, positions: [2] })).toMatchObject({
+          status: "unverified_contact",
+          position: 2,
+        });
+      } finally {
+        delete process.env.GMAIL_BATCH_LIVE;
+      }
       expect(await mod.cancelBatch(stranger)).toMatchObject({ cancelled: false });
     } finally {
       await cleanup(sql, user, stranger);
@@ -489,6 +531,96 @@ dbSuite("approved multi-hotel batch (real Neon, throwaway identities, stubbed Go
       expect(status.found).toBe(true);
       expect(status.status).toBe("pending");
     } finally {
+      await cleanup(sql, user);
+    }
+  }, 60000);
+
+  it("tampered test recipients fail closed with zero Gmail POSTs", async () => {
+    const { encryptForUser } = await import("../src/server/gmail");
+    const { user, conversationId, mod, sql } = await setup([1]);
+    try {
+      const prepared = await mod.prepareBatch({ canonicalUserId: user, conversationId, positions: [1] });
+      expect(prepared.status).toBe("ready");
+      if (prepared.status !== "ready") return;
+      const issued = await mod.issueBatchCode({ canonicalUserId: user, batchId: prepared.batchId });
+      const calls: string[] = [];
+      // Swap the stored ciphertext for a different recipient without touching the batch code.
+      await sql`update gmail_batch_items set enc_to = ${encryptForUser("attacker@example.com", user, "gmail-batch")} where batch_id = ${prepared.batchId}`;
+      const r = await mod.approveBatch({ canonicalUserId: user, code: issued!.code, fetchFn: googleStub(calls) });
+      expect(r.status).toBe("done");
+      if (r.status !== "done") return;
+      expect(r.items).toHaveLength(1);
+      expect(r.items[0]).toMatchObject({ status: "failed", errorCode: "recipient_mismatch" });
+      expect(calls.filter((u) => u.includes("gmail.googleapis.com"))).toHaveLength(0);
+    } finally {
+      await cleanup(sql, user);
+    }
+  }, 60000);
+
+  it("test batches keep the controlled recipient even if LIVE is enabled later", async () => {
+    const { user, conversationId, mod, sql } = await setup([1]);
+    const bodies: string[] = [];
+    const capturing = (async (url: string, init?: RequestInit) => {
+      if (url.includes("oauth2.googleapis.com/token")) {
+        return { ok: true, status: 200, json: async () => ({ access_token: "ya29.fresh", expires_in: 3599 }) };
+      }
+      try {
+        const raw = JSON.parse(String(init?.body))?.raw as string;
+        bodies.push(Buffer.from(raw.replace(/-/g, "+").replace(/_/g, "/"), "base64").toString("utf8"));
+      } catch {
+        bodies.push("");
+      }
+      return { ok: true, status: 200, json: async () => ({ id: "gmail-x", threadId: "t" }) };
+    }) as unknown as (url: string, init?: RequestInit) => Promise<Response>;
+    try {
+      const prepared = await mod.prepareBatch({ canonicalUserId: user, conversationId, positions: [1] });
+      expect(prepared.status).toBe("ready");
+      if (prepared.status !== "ready") return;
+      process.env.GMAIL_BATCH_LIVE = "1";
+      const issued = await mod.issueBatchCode({ canonicalUserId: user, batchId: prepared.batchId });
+      const out = await mod.approveBatch({ canonicalUserId: user, code: issued!.code, fetchFn: capturing });
+      expect(out.status).toBe("done");
+      if (out.status !== "done") return;
+      expect(out.items[0].status).toBe("sent");
+      expect(bodies).toHaveLength(1);
+      expect(bodies[0]).toContain(`To: ${process.env.GMAIL_SEND_TEST_TO}`);
+      expect(bodies[0]).not.toContain("stay@hotel1-stay.com");
+    } finally {
+      delete process.env.GMAIL_BATCH_LIVE;
+      await cleanup(sql, user);
+    }
+  }, 60000);
+
+  it("live batches send to verified contacts when the flag stays on", async () => {
+    const { user, conversationId, mod, sql } = await setup([1]);
+    const bodies: string[] = [];
+    const capturing = (async (url: string, init?: RequestInit) => {
+      if (url.includes("oauth2.googleapis.com/token")) {
+        return { ok: true, status: 200, json: async () => ({ access_token: "ya29.fresh", expires_in: 3599 }) };
+      }
+      try {
+        const raw = JSON.parse(String(init?.body))?.raw as string;
+        bodies.push(Buffer.from(raw.replace(/-/g, "+").replace(/_/g, "/"), "base64").toString("utf8"));
+      } catch {
+        bodies.push("");
+      }
+      return { ok: true, status: 200, json: async () => ({ id: "gmail-y", threadId: "t" }) };
+    }) as unknown as (url: string, init?: RequestInit) => Promise<Response>;
+    try {
+      process.env.GMAIL_BATCH_LIVE = "1";
+      const prepared = await mod.prepareBatch({ canonicalUserId: user, conversationId, positions: [1] });
+      expect(prepared.status).toBe("ready");
+      if (prepared.status !== "ready") return;
+      expect(prepared.mode).toBe("live");
+      const issued = await mod.issueBatchCode({ canonicalUserId: user, batchId: prepared.batchId });
+      const out = await mod.approveBatch({ canonicalUserId: user, code: issued!.code, fetchFn: capturing });
+      expect(out.status).toBe("done");
+      if (out.status !== "done") return;
+      expect(out.items[0].status).toBe("sent");
+      expect(bodies).toHaveLength(1);
+      expect(bodies[0]).toContain("To: stay@hotel1-stay.com");
+    } finally {
+      delete process.env.GMAIL_BATCH_LIVE;
       await cleanup(sql, user);
     }
   }, 60000);
