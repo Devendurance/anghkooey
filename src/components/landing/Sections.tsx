@@ -128,6 +128,33 @@ const CHANNELS: Channel[] = [
   },
 ];
 
+const GOOGLE_DATA: { title: string; body: string }[] = [
+  {
+    title: "What Anghkooey is for",
+    body: "Anghkooey helps with hotels, travel and dining. Connecting Google is optional, and everything else works without it.",
+  },
+  {
+    title: "What Google is asked for",
+    body: "Your Google account email, to show which mailbox is connected, and the gmail.send permission, which only allows sending email you approve.",
+  },
+  {
+    title: "You approve every email",
+    body: "Anghkooey shows you the full email first. Nothing is sent until you explicitly approve that exact message.",
+  },
+  {
+    title: "No inbox access",
+    body: "Anghkooey doesn’t read your Gmail inbox, search your mail, or look at messages you didn’t ask it to send.",
+  },
+  {
+    title: "Stored securely, easy to disconnect",
+    body: "Your Google OAuth credentials are encrypted on the server. You can disconnect Gmail any time in Settings.",
+  },
+  {
+    title: "Accepted is not delivered",
+    body: "When Gmail accepts a message, Anghkooey shows it as sent to Gmail. That doesn’t guarantee the hotel received or read it.",
+  },
+];
+
 const CONTROLS: { title: string; body: string }[] = [
   {
     title: "Off until you say yes",
@@ -447,6 +474,50 @@ export function Sections() {
               </li>
             ))}
           </ol>
+        </div>
+      </section>
+
+      {/* 5. Google data use */}
+      <section id="google-data" aria-labelledby="google-data-title" className="lp-section">
+        <div className="lp-container">
+          <header data-sr className="lp-split-head">
+            <div className="flex max-w-[36rem] flex-col items-start gap-4">
+              <p className="lp-eyebrow">Google and Gmail</p>
+              <h2 id="google-data-title" className="t-h2">
+                If you connect Gmail, here is exactly what that allows.
+              </h2>
+            </div>
+            <p className="t-lead max-w-[380px]">
+              Anghkooey can send hotel inquiries from your own Gmail, only after you approve each one.
+            </p>
+          </header>
+
+          <ol className="lp-controls">
+            {GOOGLE_DATA.map((c, i) => (
+              <li key={c.title} data-sr className="lp-control">
+                <span className="lp-num" aria-hidden>
+                  {String(i + 1).padStart(2, "0")}
+                </span>
+                <h3 className="lp-cell-title">{c.title}</h3>
+                <p className="lp-cell-body">{c.body}</p>
+              </li>
+            ))}
+          </ol>
+
+          <p data-sr className="lp-cell-body mt-8 max-w-[62ch]">
+            Anghkooey&rsquo;s use of information received from Google APIs follows the{" "}
+            <a
+              href="https://developers.google.com/terms/api-services-user-data-policy"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline underline-offset-4"
+            >
+              Google API Services User Data Policy
+              <span className="sr-only"> (opens in a new tab)</span>
+            </a>
+            , including the Limited Use requirements. Read the full <Link href="/privacy" className="underline underline-offset-4">Privacy Policy</Link>{" "}
+            and <Link href="/terms" className="underline underline-offset-4">Terms of Service</Link>.
+          </p>
         </div>
       </section>
     </div>

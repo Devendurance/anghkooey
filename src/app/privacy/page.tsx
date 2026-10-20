@@ -2,7 +2,7 @@ import Link from "next/link";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Privacy Policy — Anghkooey",
+  title: "Privacy Policy | Anghkooey",
   description: "How Anghkooey handles identities, memories, channel linking, and connected Gmail accounts.",
 };
 
@@ -71,8 +71,8 @@ export default function PrivacyPage() {
             and connecting Gmail does not change your memory setting.
           </p>
           <p className="mem-text">
-            Google is asked only to confirm your email address and for permission to send mail you approve (the
-            gmail.send scope). Anghkooey does not request inbox access and does not read your mail. OAuth tokens are
+            Google is asked only to confirm your email address (the openid and email scopes) and for permission to
+            send mail you approve (the gmail.send scope). Anghkooey does not request inbox access and does not read your mail. OAuth tokens are
             encrypted on the server and are never placed in browser storage, sent to the chat model, or logged.
           </p>
           <p className="mem-text">
@@ -92,6 +92,27 @@ export default function PrivacyPage() {
             the exact batch snapshot, and every recipient keeps its own send receipt. Batch drafts and receipts
             are kept until you cancel them or they expire, and are never used for any other purpose.
           </p>
+        </section>
+
+        <section className="acct-section">
+          <h2 className="mem-h2">Google API Services User Data Policy</h2>
+          <p className="mem-text">
+            Anghkooey&rsquo;s use and transfer of information received from Google APIs to any other app will adhere
+            to the{" "}
+            <a
+              href="https://developers.google.com/terms/api-services-user-data-policy"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Google API Services User Data Policy
+            </a>
+            , including the Limited Use requirements.
+          </p>
+          <ul className="chat-consent-list mem-text">
+            <li>Your Google email address is used to show which mailbox is connected. The gmail.send permission is used only to send emails you approve.</li>
+            <li>Google user data is not used for advertising and is not sold.</li>
+            <li>Anghkooey does not read your Gmail inbox, so no inbox content is collected.</li>
+          </ul>
         </section>
 
         <section className="acct-section">
@@ -115,7 +136,8 @@ export default function PrivacyPage() {
         </section>
 
         <p className="mem-foot">
-          <Link href="/settings">Settings</Link> · <Link href="/chat">Back to chat</Link>
+          <Link href="/terms">Terms of Service</Link> · <Link href="/settings">Settings</Link> ·{" "}
+          <Link href="/chat">Back to chat</Link>
         </p>
       </div>
     </div>

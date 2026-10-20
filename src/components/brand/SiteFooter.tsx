@@ -10,6 +10,7 @@ const PRODUCT = [
   { label: "Everyday uses", href: "#experiences" },
   { label: "Channels", href: "#channels" },
   { label: "Privacy and control", href: "#control" },
+  { label: "Google and Gmail", href: "#google-data" },
 ];
 
 const linkCls = "inline-flex min-h-11 items-center gap-1.5 text-[15px] text-footer-link transition-colors duration-200 hover:text-white";
@@ -84,6 +85,11 @@ export function SiteFooter() {
                 <li>
                   <Link href="/privacy" className={linkCls}>
                     Privacy Policy
+                  </Link>
+                </li>
+                <li>
+                  <Link href="/terms" className={linkCls}>
+                    Terms of Service
                   </Link>
                 </li>
                 <li>
