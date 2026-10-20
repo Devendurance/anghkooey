@@ -1,4 +1,5 @@
 import { lookup as dnsLookup } from "node:dns/promises";
+import type { LookupAddress, LookupAllOptions, LookupOneOptions } from "node:dns";
 import { request as httpsRequest } from "node:https";
 import { getSql } from "./db";
 import type { HotelCandidate } from "./hotels";
@@ -265,7 +266,7 @@ export function formatContactResults(
     } else if (d.status === "verified" && d.method === "messaging" && d.messagingUrl) {
       lines.push(`${r.position}. ${r.name} — Official messaging link found${via}.`);
     } else if (d.status === "incomplete" && d.retryable) {
-      lines.push(`${r.position}. ${r.name} — website couldn't be checked (${d.note}). Try CONTACT ${r.position} again.`);
+      lines.push(`${r.position}. ${r.name} — ${d.note} Try CONTACT ${r.position} again.`);
     } else if (d.status === "incomplete") {
       lines.push(`${r.position}. ${r.name} — no verified contact yet (${d.note})`);
     } else {
@@ -346,6 +347,28 @@ async function defaultLookup(host: string): Promise<string[]> {
 }
 
 /**
+ * DNS lookup pinned to one previously validated public IP (DNS-rebinding
+ * safe). Honors the lookup `all` contract: modern Node resolves with
+ * `{ all: true }` under autoSelectFamily, which requires an array of
+ * address records, not a bare string (a bare string fails with
+ * ERR_INVALID_IP_ADDRESS). TLS verification and Host stay on the real
+ * hostname via `servername`.
+ */
+export function pinnedLookup(ip: string, family: 4 | 6) {
+  return (
+    _hostname: string,
+    options: LookupOneOptions | LookupAllOptions,
+    callback: (err: NodeJS.ErrnoException | null, address: string | LookupAddress[], family: number) => void
+  ): void => {
+    if (options && (options as LookupAllOptions).all === true) {
+      callback(null, [{ address: ip, family }], family);
+    } else {
+      callback(null, ip, family);
+    }
+  };
+}
+
+/**
  * Default transport: the socket connects to the validated IP (DNS-rebinding
  * safe) while TLS verification and the Host header keep the real hostname.
  */
@@ -358,15 +381,19 @@ async function defaultPinnedTransport(args: {
   const u = new URL(args.url);
   const family = args.ip.includes(":") ? 6 : 4;
   return new Promise((resolve, reject) => {
+    const requestOptions: Parameters<typeof httpsRequest>[1] & { autoSelectFamily?: boolean } = {
+      method: "GET",
+      headers: args.headers,
+      // Dial exactly the validated IP. autoSelectFamily is off because a
+      // single pinned address must not be re-resolved or raced.
+      lookup: pinnedLookup(args.ip, family),
+      autoSelectFamily: false,
+      timeout: args.timeoutMs,
+      servername: u.hostname,
+    };
     const req = httpsRequest(
       args.url,
-      {
-        method: "GET",
-        headers: args.headers,
-        lookup: (_host, _opts, cb) => cb(null, args.ip, family),
-        timeout: args.timeoutMs,
-        servername: u.hostname,
-      },
+      requestOptions,
       (res) => {
         const chunks: Uint8Array[] = [];
         let total = 0;
@@ -416,13 +443,14 @@ async function defaultPinnedTransport(args: {
  * distinguished so contact diagnostics never collapse into a generic
  * fetch error. Never includes hostnames, URLs, or response bodies.
  */
-export function classifyTransportError(e: unknown): "timeout" | "connection_failed" | "tls_failed" | "fetch_failed" {
+export function classifyTransportError(e: unknown): "timeout" | "connection_failed" | "tls_failed" | "fetch_failed" | "transport_config" {
   if (e instanceof SafeFetchError) {
-    if (e.code === "timeout" || e.code === "connection_failed" || e.code === "tls_failed") return e.code;
+    if (e.code === "timeout" || e.code === "connection_failed" || e.code === "tls_failed" || e.code === "transport_config") return e.code;
     return "fetch_failed";
   }
   const code = (e as NodeJS.ErrnoException | null)?.code ?? "";
   const text = `${code} ${(e as Error)?.message ?? ""}`;
+  if (/^ERR_INVALID_|ERR_DNS_SET_SERVERS_FAILED|ERR_SOCKET_BAD_PORT|ERR_OUT_OF_RANGE/.test(code)) return "transport_config";
   if (/^ERR_TLS|^CERT_|UNABLE_TO_VERIFY|certificate|handshake|\bSSL\b/i.test(text)) return "tls_failed";
   if (
     ["ECONNREFUSED", "ENOTFOUND", "EHOSTUNREACH", "EHOSTDOWN", "ENETUNREACH", "EPIPE", "ECONNRESET", "EAI_AGAIN", "ETIMEDOUT"].includes(
@@ -816,6 +844,8 @@ export function friendlyFetchNote(code: string): string {
       return "The website returned a server error.";
     case "dns_failed":
       return "The website address could not be resolved.";
+    case "transport_config":
+      return "The check could not run because of a local network setup problem.";
     default:
       return "The website couldn't be checked.";
   }
@@ -1063,6 +1093,7 @@ export type HotelUrlDiagnosis = {
     | "not_html"
     | "too_large"
     | "aggregator"
+    | "transport_config"
     | "bad_url";
   checks: HotelUrlCheck[];
   signals: { hasEmail: boolean; hasForm: boolean; hasPhone: boolean; hasMessaging: boolean };
@@ -1142,7 +1173,9 @@ export async function diagnoseHotelUrl(
                     ? ("not_html" as const)
                     : code === "too_large"
                       ? ("too_large" as const)
-                      : ("connection_failed" as const);
+                      : code === "transport_config"
+                        ? ("transport_config" as const)
+                        : ("connection_failed" as const);
     checks.push({ name: "fetch", ok: false, code, latencyMs: Date.now() - fetchStart });
     return fail(verdict, host, none);
   }

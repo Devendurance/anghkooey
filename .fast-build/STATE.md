@@ -23,7 +23,7 @@
 - Identity rules: no wallet, no email, no fake unlink/delete. Add each route to APP_NAV in src/lib/site.ts only when its page exists.
 
 ## Current slice
-- Multi-channel contact discovery and diagnostics (2026-10-18): reservations-email, contact-form, phone, and messaging extraction with property vs central attribution, LIVE gate requires verified reservations email, diagnose:hotel owner script, honest iMessage copy. Next: owner runs migrate (008), pulls both hosts, restarts worker, runs the CONTACT 1,2 live verification.
+- Pinned HTTPS lookup-contract fix (2026-10-26): honours Node `lookup` all:true callback shape, explicit autoSelectFamily:false, new transport_config category, deduped retry copy. Next: owner pulls both hosts, restarts worker, runs the CONTACT 1,2 live verification.
 
 ## Completed
 - Gmail-D test-mode unblock and contact diagnostics (2026-10-18): TEST batches prepare without verified contacts while LIVE keeps the strict gate, execution-time recipient revalidation fails closed on mismatch or missing config, TEST EMAIL headers plus per-hotel association with verified/unverified labeling and [TEST] subjects, classified transport errors (timeout, connection_failed, tls_failed) with validated-IP failover and blocked/rate-limited/provider-error mapping, redirect-to-booking-platform rejection. Verification: 202 passed 31 skipped across 22 suites (DB tests skip without DATABASE_URL in sandbox), typecheck pass, eslint clean, production build pass, git diff --check clean, secret scan clean. No live email sent, no schema changes.

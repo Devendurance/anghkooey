@@ -1,4 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
+import { createServer, get } from "node:http";
+import type { AddressInfo } from "node:net";
+import { SafeFetchError } from "../src/server/hotel-contacts";
 import type { DiscoveryResult } from "../src/server/hotel-contacts";
 import {
   classifyEmailRole,
@@ -18,11 +21,13 @@ import {
   isHotelGroupDomain,
   isHotelsCommand,
   isPublicIp,
+  isRetryableFetchCode,
   isSameTrip,
   isShortlistUsable,
   isValidContactEmail,
   pageMentionsHotel,
   parseContactCommand,
+  pinnedLookup,
 } from "../src/server/hotel-contacts";
 
 const PUBLIC_IP = "93.184.216.34";
@@ -106,6 +111,51 @@ describe("transport failure classification (no DB, no network)", () => {
     );
     expect(d).toMatchObject({ status: "incomplete", email: null, retryable: true });
     expect(d.note).toMatch(/rate-limited|rate limited/i);
+  });
+});
+
+describe("pinned lookup contract (no DB, real local socket, no mocks)", () => {
+  it("answers the lookup `all` shape with an address record array", async () => {
+    const cbAll = await new Promise<unknown>((resolve) => {
+      pinnedLookup("93.184.216.34", 4)("example.com", { all: true, verbatim: true } as never, ((...a: unknown[]) => resolve(a)) as never);
+    });
+    expect(cbAll).toEqual([null, [{ address: "93.184.216.34", family: 4 }], 4]);
+    const cbOne = await new Promise<unknown>((resolve) => {
+      pinnedLookup("93.184.216.34", 4)("example.com", {} as never, ((...a: unknown[]) => resolve(a)) as never);
+    });
+    expect(cbOne).toEqual([null, "93.184.216.34", 4]);
+  });
+
+  it("connects through the real Node resolver path with default options", async () => {
+    const server = createServer((_req, res) => {
+      res.end("pinned-ok");
+    });
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    const port = (server.address() as AddressInfo).port;
+    try {
+      const body = await new Promise<string>((resolve, reject) => {
+        // Default options: autoSelectFamily on, exactly like production.
+        // The pre-fix single-string callback fails here with ERR_INVALID_IP_ADDRESS.
+        const req = get(`http://localhost:${port}/`, { lookup: pinnedLookup("127.0.0.1", 4) }, (res) => {
+          let text = "";
+          res.on("data", (c: Uint8Array) => (text += Buffer.from(c).toString()));
+          res.on("end", () => resolve(`${res.statusCode}:${text}`));
+        });
+        req.on("error", reject);
+        req.setTimeout(8000, () => reject(new Error("local test timed out")));
+      });
+      expect(body).toBe("200:pinned-ok");
+    } finally {
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
+  }, 15000);
+
+  it("classifies local runtime misconfiguration apart from network failures", () => {
+    const badIp = Object.assign(new Error("Invalid IP address: undefined"), { code: "ERR_INVALID_IP_ADDRESS" });
+    expect(classifyTransportError(badIp)).toBe("transport_config");
+    const badOpt = Object.assign(new Error("bad option"), { code: "ERR_INVALID_OPT_VALUE" });
+    expect(classifyTransportError(badOpt)).toBe("transport_config");
+    expect(isRetryableFetchCode("transport_config")).toBe(false);
   });
 });
 
@@ -583,6 +633,17 @@ describe("hotel URL diagnostics (no DB, stubbed network)", () => {
     const agg = await diagnoseHotelUrl("https://www.booking.com/hotel/gb/x.html", { lookupFn: lookupOk });
     expect(agg.verdict).toBe("aggregator");
   });
+
+  it("surfaces local runtime misconfiguration distinctly from network failures", async () => {
+    const broken = await diagnoseHotelUrl("https://riverside-hotel.com/rooms", {
+      transport: (async () => {
+        throw new SafeFetchError("transport_config");
+      }) as never,
+      lookupFn: lookupOk,
+    });
+    expect(broken.verdict).toBe("transport_config");
+    expect(broken.checks.find((c) => c.name === "fetch")?.code).toBe("transport_config");
+  });
 });
 
 describe("shortlist presentation (no DB, no network)", () => {
@@ -697,8 +758,8 @@ describe("shortlist presentation (no DB, no network)", () => {
         result: { ...missing, status: "incomplete", note: "The website timed out.", retryable: true },
       },
     ]);
-    expect(retryMsg).toContain("website couldn't be checked");
-    expect(retryMsg).toContain("Try CONTACT 1 again");
+    expect(retryMsg).toContain("The website timed out. Try CONTACT 1 again.");
+    expect(retryMsg).not.toMatch(/couldn't be checked \(/);
   });
 
   it("gates selections on active status and future dates", () => {
