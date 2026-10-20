@@ -87,6 +87,11 @@ export default function PrivacyPage() {
             exact email. The stored record is the Gmail message identifier returned by Google, which confirms
             receipt by Gmail, not delivery to the recipient inbox. Draft contents are encrypted at rest.
           </p>
+          <p className="mem-text">
+            Multi-hotel batches work the same way: each inquiry is previewed in full, one approval code covers
+            the exact batch snapshot, and every recipient keeps its own send receipt. Batch drafts and receipts
+            are kept until you cancel them or they expire, and are never used for any other purpose.
+          </p>
         </section>
 
         <section className="acct-section">

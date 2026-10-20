@@ -67,14 +67,14 @@ export function sendTestInbox(): string {
   return v;
 }
 
-function newApprovalCode(): string {
+export function newApprovalCode(): string {
   const bytes = randomBytes(6);
   let out = "";
   for (const b of bytes) out += CODE_ALPHABET[b % CODE_ALPHABET.length];
   return out;
 }
 
-function hashCode(code: string): string {
+export function hashCode(code: string): string {
   return createHash("sha256").update(code).digest("hex");
 }
 
@@ -127,11 +127,14 @@ export type InquiryBodyInput = {
   memories: MemoryHit[];
   /** Explicit party size. Null means unstated and must never be invented. */
   partySize: number | null;
+  /** Property name for multi-hotel batches. Omitted for the single inquiry. */
+  hotelName?: string | null;
 };
 
 /** Deterministic inquiry body from trip facts + recalled preferences. No LLM. */
 export function buildInquiryBody(input: InquiryBodyInput): string | null {
   const { params, memories, partySize } = input;
+  const hotelName = input.hotelName?.trim() || null;
   if (!params.destination) return null;
   const dates = params.timing ?? null;
   if (!dates) return null;
@@ -142,7 +145,7 @@ export function buildInquiryBody(input: InquiryBodyInput): string | null {
   const lines = [
     "Hello,",
     "",
-    `I am planning a stay in ${params.destination} from ${dates}${nights ? ` (${nights})` : ""}${party}${budget ? `, with a budget of ${budget}` : ""}.`,
+    `I am planning a stay${hotelName ? ` at ${hotelName}` : ""} in ${params.destination} from ${dates}${nights ? ` (${nights})` : ""}${party}${budget ? `, with a budget of ${budget}` : ""}.`,
     "",
   ];
   const prefs = memories.slice(0, 3).map((m) => {
@@ -175,18 +178,32 @@ export type DraftPreview = {
 };
 
 /** Short-lived pending draft for one identity. Supersedes older pendings. */
-export async function prepareDraft(args: {
+export type TripContext = {
+  senderEmail: string;
+  /** Test inbox when configured; null means live-send only. */
+  inbox: string | null;
+  effectiveParams: TripParams;
+  memories: MemoryHit[];
+  partySize: number | null;
+  stay: { checkIn: string; checkOut: string; nights: number | null };
+};
+
+/**
+ * Shared trip context for single and batch inquiry drafts: canonical stay,
+ * normalized params, authorized recalled preferences, owner mailbox.
+ * Identical inputs always produce identical context.
+ */
+export async function collectTripContext(args: {
   canonicalUserId: string;
   conversationId: string;
-}): Promise<{ status: "ready"; preview: DraftPreview } | { status: "need_info"; missing: string[] } | { status: "no_gmail" }> {
-  const sql = getSql();
+}): Promise<{ status: "ready"; context: TripContext } | { status: "need_info"; missing: string[] } | { status: "no_gmail" }> {
   const creds = await getGmailOwnerCredentials(args.canonicalUserId);
   if (!creds) return { status: "no_gmail" };
-  let inbox: string;
+  let inbox: string | null = null;
   try {
     inbox = sendTestInbox();
   } catch {
-    return { status: "no_gmail" };
+    inbox = null;
   }
 
   let history: { role: "user" | "assistant"; text: string }[] = [];
@@ -196,8 +213,6 @@ export async function prepareDraft(args: {
     history = [];
   }
   const userTexts = history.filter((h) => h.role === "user").map((h) => h.text);
-  // One canonical stay, identical to the Trip Brief path: sequential date
-  // refinement plus latest-nights checkout recompute. Never stale.
   const stay = resolveEffectiveStay(userTexts, userTexts[userTexts.length - 1] ?? "");
   const params = extractTripParams(userTexts);
   const partySize = parsePartySize(userTexts);
@@ -232,6 +247,18 @@ export async function prepareDraft(args: {
     timing: `${stay.checkIn} to ${stay.checkOut}`,
     nights: stay.nights ?? params.nights,
   };
+  return { status: "ready", context: { senderEmail: creds.email, inbox, effectiveParams, memories, partySize, stay } };
+}
+
+export async function prepareDraft(args: {
+  canonicalUserId: string;
+  conversationId: string;
+}): Promise<{ status: "ready"; preview: DraftPreview } | { status: "need_info"; missing: string[] } | { status: "no_gmail" }> {
+  const sql = getSql();
+  const ctx = await collectTripContext({ canonicalUserId: args.canonicalUserId, conversationId: args.conversationId });
+  if (ctx.status !== "ready") return ctx;
+  const { senderEmail, inbox, effectiveParams, memories, partySize } = ctx.context;
+  if (!inbox) return { status: "no_gmail" };
   const subject = buildInquirySubject(effectiveParams);
   const body = buildInquiryBody({ params: effectiveParams, memories, partySize });
   if (!subject || !body) return { status: "need_info", missing: ["exact check-in and check-out dates"] };
@@ -245,7 +272,7 @@ export async function prepareDraft(args: {
     values (
       ${args.canonicalUserId},
       ${hashCode(code)},
-      ${creds.email},
+      ${senderEmail},
       ${encryptForUser(inbox, args.canonicalUserId, "gmail-draft")},
       ${encryptForUser(subject, args.canonicalUserId, "gmail-draft")},
       ${encryptForUser(body, args.canonicalUserId, "gmail-draft")},
@@ -255,7 +282,7 @@ export async function prepareDraft(args: {
   return {
     status: "ready",
     preview: {
-      senderEmail: creds.email,
+      senderEmail,
       to: inbox,
       subject,
       body,
@@ -364,6 +391,66 @@ async function refreshAccessToken(refreshToken: string, fetchFn: FetchFn): Promi
  * The Gmail POST runs once per draft; uncertain outcomes record UNKNOWN
  * and never auto-retry. Repeated SENDs return the stored receipt.
  */
+export type GmailPostResult =
+  | { ok: true; messageId: string; threadId: string | null }
+  | { ok: false; errorCode: string; uncertain: boolean };
+
+/**
+ * One Gmail send: refresh token, build MIME, POST once, classify the
+ * outcome. Shared by single and batch sends. Never throws and never
+ * retries; uncertain outcomes stay uncertain. No Neon writes here.
+ */
+export async function executeGmailSend(args: {
+  refreshToken: string;
+  from: string;
+  to: string;
+  subject: string;
+  body: string;
+  fetchFn?: FetchFn;
+}): Promise<GmailPostResult> {
+  const fetchFn: FetchFn = args.fetchFn ?? fetch;
+  let accessToken: string;
+  try {
+    accessToken = await refreshAccessToken(args.refreshToken, fetchFn);
+  } catch (e) {
+    if (e instanceof GmailError && e.code === "refresh_failed") {
+      return { ok: false, errorCode: "refresh_failed", uncertain: false };
+    }
+    return { ok: false, errorCode: "refresh_unavailable", uncertain: true };
+  }
+  let raw: string;
+  try {
+    raw = buildMimeMessage({ from: args.from, to: args.to, subject: args.subject, body: args.body });
+  } catch {
+    return { ok: false, errorCode: "invalid_input", uncertain: false };
+  }
+  let res: Response;
+  try {
+    res = await fetchFn(GMAIL_SEND_URL, {
+      method: "POST",
+      headers: { authorization: `Bearer ${accessToken}`, "content-type": "application/json" },
+      body: JSON.stringify({ raw }),
+    });
+  } catch {
+    return { ok: false, errorCode: "send_timeout", uncertain: true };
+  }
+  if (res.status === 429) return { ok: false, errorCode: "rate_limited", uncertain: true };
+  if (res.status >= 500) return { ok: false, errorCode: "provider_error", uncertain: true };
+  let data: Record<string, unknown>;
+  try {
+    data = (await res.json()) as Record<string, unknown>;
+  } catch {
+    return { ok: false, errorCode: "bad_response", uncertain: true };
+  }
+  if (!res.ok) {
+    if (res.status === 401) return { ok: false, errorCode: "gmail_unauthorized", uncertain: false };
+    if (res.status === 403) return { ok: false, errorCode: "gmail_forbidden", uncertain: false };
+    return { ok: false, errorCode: "send_rejected", uncertain: false };
+  }
+  if (typeof data.id !== "string" || !data.id) return { ok: false, errorCode: "bad_response", uncertain: true };
+  return { ok: true, messageId: data.id, threadId: typeof data.threadId === "string" ? data.threadId : null };
+}
+
 export async function approveAndSend(args: {
   canonicalUserId: string;
   code: string;
@@ -445,61 +532,31 @@ export async function approveAndSend(args: {
 
   const creds = await getGmailOwnerCredentials(args.canonicalUserId);
   if (!creds) return fail("no_gmail");
-  let accessToken: string;
-  try {
-    accessToken = await refreshAccessToken(creds.refreshToken, fetchFn);
-  } catch (e) {
-    if (e instanceof GmailError && e.code === "refresh_failed") return fail("refresh_failed");
-    return unknown("refresh_unavailable");
-  }
-
-  let raw: string;
-  try {
-    raw = buildMimeMessage({ from: draft.sender_email as string, to, subject, body });
-  } catch {
-    return fail("invalid_input");
-  }
-
-  let res: Response;
-  try {
-    res = await fetchFn(GMAIL_SEND_URL, {
-      method: "POST",
-      headers: { authorization: `Bearer ${accessToken}`, "content-type": "application/json" },
-      body: JSON.stringify({ raw }),
-    });
-  } catch {
-    return unknown("send_timeout");
-  }
-  if (res.status === 429) return unknown("rate_limited");
-  if (res.status >= 500) return unknown("provider_error");
-  let data: Record<string, unknown>;
-  try {
-    data = (await res.json()) as Record<string, unknown>;
-  } catch {
-    return unknown("bad_response");
-  }
-  if (!res.ok) {
-    if (res.status === 401) return fail("gmail_unauthorized");
-    if (res.status === 403) return fail("gmail_forbidden");
-    return fail("send_rejected");
-  }
-  if (typeof data.id !== "string" || !data.id) return unknown("bad_response");
-  const threadId = typeof data.threadId === "string" ? data.threadId : null;
+  const posted = await executeGmailSend({
+    refreshToken: creds.refreshToken,
+    from: draft.sender_email as string,
+    to,
+    subject,
+    body,
+    fetchFn,
+  });
+  if (!posted.ok) return posted.uncertain ? unknown(posted.errorCode) : fail(posted.errorCode);
+  const threadId = posted.threadId;
   // Gmail accepted the message. If THIS write fails the provider may still
   // have it, so it must surface as uncertain, never as unsent.
   try {
     if (args.persistReceipt) {
-      await args.persistReceipt(draftId, data.id, threadId);
+      await args.persistReceipt(draftId, posted.messageId, threadId);
     } else {
       await sql`
-        update gmail_drafts set status = 'sent', gmail_message_id = ${data.id},
+        update gmail_drafts set status = 'sent', gmail_message_id = ${posted.messageId},
           gmail_thread_id = ${threadId}, sent_at = now(), updated_at = now()
         where id = ${draftId}`;
     }
   } catch {
     return unknown("receipt_unstored");
   }
-  return { status: "sent", gmailMessageId: data.id };
+  return { status: "sent", gmailMessageId: posted.messageId };
 }
 
 /** Cancel the owner's pending draft. Idempotent. */

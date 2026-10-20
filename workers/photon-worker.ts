@@ -8,6 +8,24 @@ import { cancelMerge, confirmLink, confirmMerge, getCanonicalUserId, requestMerg
 import { handleMessage } from "../src/server/orchestrator";
 import { isHotelsCommand, parseContactCommand, type DiscoveryResult } from "../src/server/hotel-contacts";
 import {
+  approveBatch,
+  cancelBatch,
+  chunkPreview,
+  formatApprovalPrompt,
+  formatBatchPreview,
+  formatBatchResult,
+  formatBatchStatusView,
+  getBatchStatus,
+  getPendingBatchPreviews,
+  isCancelAllCommand,
+  isInquiriesCommand,
+  isInquireCommand,
+  isPreviewAllCommand,
+  issueBatchCode,
+  parseSendAllCommand,
+  prepareBatch,
+} from "../src/server/gmail-batch";
+import {
   approveAndSend,
   cancelPending,
   formatPreviewMessage,
@@ -382,6 +400,125 @@ async function main() {
         } catch {
           await message.reply("Something went wrong looking up hotels. No email was sent. Try again in a moment.");
           hotelLog(contactSel ? "hotel_contact" : "hotel_list", "failed");
+          continue;
+        }
+      }
+
+      // Approved multi-hotel outreach. Read-only until an explicit SEND ALL
+      // approval for the exact snapshot. Never touches Gmail-C single sends.
+      const inquireSel = isInquireCommand(text);
+      const sendAllCode = parseSendAllCommand(text);
+      const isBatchCmd =
+        inquireSel !== null || sendAllCode !== null || isPreviewAllCommand(text) || isCancelAllCommand(text) || isInquiriesCommand(text);
+      if (isBatchCmd) {
+        const { getCanonicalUserId } = await import("../src/server/linking");
+        const canonical = await getCanonicalUserId(userId).catch(() => userId);
+        const batchLog = (event: string, status: string) =>
+          console.log(
+            JSON.stringify({
+              worker: "photon",
+              event,
+              platform,
+              sender_hash: hash12(senderId),
+              status,
+              latency_ms: Date.now() - started,
+            })
+          );
+        try {
+          const rl = await checkRateLimit(`gmailbatch:${hash12(senderId)}`, sendAllCode ? 5 : 10, 60_000);
+          if (!rl.allowed) {
+            await message.reply("You are sending batch requests too quickly. Wait a moment and try again.");
+            continue;
+          }
+          if (sendAllCode) {
+            const outcome = await approveBatch({ canonicalUserId: canonical, code: sendAllCode });
+            if (outcome.status === "invalid_code") {
+              await message.reply("That code doesn't match a pending email batch. Reply INQUIRIES to check status.");
+            } else if (outcome.status === "expired") {
+              await message.reply("That batch approval expired. Say INQUIRE 1 to prepare a fresh batch.");
+            } else if (outcome.status === "cancelled") {
+              await message.reply("That batch was cancelled. Say INQUIRE 1 to start over.");
+            } else {
+              await message.reply(formatBatchResult({ mode: outcome.mode, items: outcome.items }).slice(0, 3500));
+            }
+            batchLog("gmail_batch_send", outcome.status);
+            continue;
+          }
+          if (isPreviewAllCommand(text)) {
+            const st = await getBatchStatus(canonical);
+            if (!st.found || st.status !== "pending") {
+              await message.reply("No pending email batch. Say INQUIRE 1 to prepare one from your shortlist.");
+            } else {
+              const previews = await getPendingBatchPreviews(canonical);
+              if (previews.length === 0) {
+                await message.reply("No pending email batch. Say INQUIRE 1 to prepare one from your shortlist.");
+              } else {
+                for (const p of previews) {
+                  for (const part of chunkPreview(formatBatchPreview({ ...p, index: p.position, total: previews.length, mode: st.mode ?? "test" }))) {
+                    await message.reply(part.slice(0, 3500));
+                  }
+                }
+                await message.reply("Use the code from the original approval message to approve this exact batch.");
+              }
+            }
+            batchLog("gmail_batch_preview", "shown");
+            continue;
+          }
+          if (isCancelAllCommand(text)) {
+            const { cancelled } = await cancelBatch(canonical);
+            await message.reply(cancelled ? "Batch cancelled. No email was sent." : "No pending email batch to cancel.");
+            batchLog("gmail_batch_cancel", cancelled ? "cancelled" : "none");
+            continue;
+          }
+          if (isInquiriesCommand(text)) {
+            const st = await getBatchStatus(canonical);
+            await message.reply(formatBatchStatusView(st).slice(0, 3500));
+            batchLog("gmail_batch_status", st.found ? st.status ?? "found" : "none");
+            continue;
+          }
+          if (inquireSel) {
+            const prepared = await prepareBatch({ canonicalUserId: canonical, conversationId, positions: inquireSel });
+            if (prepared.status === "no_gmail") {
+              await message.reply("No Gmail connected for this chat. Connect Gmail in your web Settings first.");
+            } else if (prepared.status === "need_info") {
+              await message.reply(`To draft the emails I still need: ${prepared.missing.join(", ")}. Tell me, then say INQUIRE ${inquireSel.join(",")} again.`);
+            } else if (prepared.status === "no_shortlist") {
+              await message.reply("No hotel shortlist yet. Ask for a TRIP BRIEF with destination and dates first.");
+            } else if (prepared.status === "stale_shortlist") {
+              await message.reply("That shortlist is no longer current. Ask for a fresh TRIP BRIEF to refresh candidates.");
+            } else if (prepared.status === "invalid_selection") {
+              await message.reply(`Pick numbers 1 to ${prepared.max} from your current shortlist. Reply HOTELS to see it.`);
+            } else if (prepared.status === "unverified_contact") {
+              await message.reply(`No verified contact for ${prepared.hotelName} (pick ${prepared.position}): ${prepared.reason} Reply CONTACT ${prepared.position} to verify one first.`);
+            } else if (prepared.status === "not_configured") {
+              await message.reply("Email sending is not configured right now. Try again later.");
+            } else {
+              const total = prepared.previews.length;
+              try {
+                for (let i = 0; i < total; i++) {
+                  const p = prepared.previews[i];
+                  const text = formatBatchPreview({ ...p, index: i + 1, total, mode: prepared.mode });
+                  for (const part of chunkPreview(text)) {
+                    await message.reply(part.slice(0, 3500));
+                  }
+                }
+                const issued = await issueBatchCode({ canonicalUserId: canonical, batchId: prepared.batchId });
+                if (!issued) {
+                  await message.reply("The batch changed before approval. Say INQUIRE again for a fresh preview.");
+                } else {
+                  await message.reply(formatApprovalPrompt({ count: total, code: issued.code, expiresAt: issued.expiresAt, mode: prepared.mode }).slice(0, 3500));
+                }
+              } catch {
+                await message.reply("Something went wrong preparing the batch. No email was sent and no approval was issued. Try again.");
+              }
+            }
+            batchLog("gmail_batch_prepare", prepared.status);
+            continue;
+          }
+          continue;
+        } catch {
+          await message.reply("Could not confirm the batch outcome. Check Gmail Sent before attempting another send.");
+          batchLog("gmail_batch_error", "uncertain");
           continue;
         }
       }
