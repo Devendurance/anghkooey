@@ -1,4 +1,5 @@
 import { lookup as dnsLookup } from "node:dns/promises";
+import { request as httpsRequest } from "node:https";
 import { getSql } from "./db";
 import type { HotelCandidate } from "./hotels";
 
@@ -115,6 +116,30 @@ export function isShortlistUsable(s: Pick<ShortlistView, "status" | "checkIn">, 
   return s.status === "active" && s.checkIn >= today;
 }
 
+export type TripKey = { destination: string; checkIn: string; checkOut: string };
+
+/** Same destination (case-insensitive) and exact dates. Anything else is a changed trip. */
+export function isSameTrip(a: TripKey, b: TripKey): boolean {
+  return (
+    a.destination.trim().toLowerCase() === b.destination.trim().toLowerCase() &&
+    a.checkIn === b.checkIn &&
+    a.checkOut === b.checkOut
+  );
+}
+
+/**
+ * Marks the active shortlist stale when the canonical trip changed.
+ * Call before a new search so a failed provider never leaves old-trip
+ * candidates looking current. Same trip is left untouched.
+ */
+export async function invalidateStaleShortlist(canonicalUserId: string, trip: TripKey): Promise<void> {
+  const sql = getSql();
+  await sql`
+    update hotel_shortlists set status = 'stale', updated_at = now()
+    where user_id = ${canonicalUserId} and status = 'active'
+      and (lower(destination) != lower(${trip.destination}) or check_in != ${trip.checkIn} or check_out != ${trip.checkOut})`;
+}
+
 export type DiscoveryResult = {
   status: "verified" | "contact_not_found" | "incomplete";
   email: string | null;
@@ -179,7 +204,11 @@ export function formatShortlistMessage(s: ShortlistView): string {
   const lines = [`Your hotel shortlist for ${s.destination}, ${s.checkIn} to ${s.checkOut} (${s.items.length}):`];
   for (const it of s.items) {
     const rate =
-      it.rateAmount !== null && it.rateCurrency ? `$${it.rateAmount} ${it.rateCurrency} observed nightly` : "no rate returned";
+      it.rateAmount !== null
+        ? it.rateCurrency
+          ? `${it.rateAmount} ${it.rateCurrency} observed nightly`
+          : `${it.rateAmount} observed nightly (currency unknown)`
+        : "no rate returned";
     lines.push(`${it.position}. ${it.name} — ${rate} (${shortDomain(it.sourceUrl)})`);
   }
   lines.push("Reply CONTACT 1 (or 1,2) to verify hotel contact details. Rates are observed and indicative.");
@@ -194,12 +223,12 @@ export function formatContactResults(
   const lines = [`Hotel contacts for ${s.destination}:`];
   for (const r of results) {
     if (r.result.status === "verified" && r.result.email) {
-      lines.push(`${r.position}. ${r.name} — contact verified: ${r.result.email} (via ${shortDomain(r.result.sourceUrl ?? "")})`);
+      lines.push(`${r.position}. ${r.name} — contact verified on the hotel site: ${r.result.email} (via ${shortDomain(r.result.sourceUrl ?? "")})`);
     } else {
       lines.push(`${r.position}. ${r.name} — no verified email (${r.result.note})`);
     }
   }
-  lines.push("Say EMAIL to draft an inquiry once you have a verified contact.");
+  lines.push("EMAIL drafts to the test inbox only. Hotel sends are not enabled yet.");
   return lines.join("\n");
 }
 
@@ -250,8 +279,17 @@ export function isBlockedHostname(host: string): boolean {
   return false;
 }
 
+export type PinnedTransportResult = { status: number; headers: Record<string, string>; body: Uint8Array };
+
+export type PinnedTransport = (args: {
+  url: string;
+  ip: string;
+  timeoutMs: number;
+  headers: Record<string, string>;
+}) => Promise<PinnedTransportResult>;
+
 export type SafeFetchOpts = {
-  fetchFn?: typeof fetch;
+  transport?: PinnedTransport;
   lookupFn?: (host: string) => Promise<string[]>;
   timeoutMs?: number;
   maxRedirects?: number;
@@ -263,41 +301,75 @@ async function defaultLookup(host: string): Promise<string[]> {
   return all.map((r) => r.address);
 }
 
-async function readBounded(res: Response, maxBytes: number): Promise<string> {
-  if (!res.body) {
-    const text = await res.text();
-    if (Buffer.byteLength(text, "utf8") > maxBytes) throw new SafeFetchError("too_large");
-    return text;
-  }
-  const reader = res.body.getReader();
-  const chunks: Uint8Array[] = [];
-  let total = 0;
-  try {
-    for (;;) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      total += value.byteLength;
-      if (total > maxBytes) {
-        await reader.cancel().catch(() => {});
-        throw new SafeFetchError("too_large");
+/**
+ * Default transport: the socket connects to the validated IP (DNS-rebinding
+ * safe) while TLS verification and the Host header keep the real hostname.
+ */
+async function defaultPinnedTransport(args: {
+  url: string;
+  ip: string;
+  timeoutMs: number;
+  headers: Record<string, string>;
+}): Promise<PinnedTransportResult> {
+  const u = new URL(args.url);
+  const family = args.ip.includes(":") ? 6 : 4;
+  return new Promise((resolve, reject) => {
+    const req = httpsRequest(
+      args.url,
+      {
+        method: "GET",
+        headers: args.headers,
+        lookup: (_host, _opts, cb) => cb(null, args.ip, family),
+        timeout: args.timeoutMs,
+        servername: u.hostname,
+      },
+      (res) => {
+        const chunks: Uint8Array[] = [];
+        let total = 0;
+        let settled = false;
+        const fail = (e: Error) => {
+          if (settled) return;
+          settled = true;
+          res.destroy();
+          reject(e);
+        };
+        res.on("data", (c: Uint8Array) => {
+          total += c.byteLength;
+          if (total > MAX_BYTES) {
+            fail(new SafeFetchError("too_large"));
+            return;
+          }
+          chunks.push(c);
+        });
+        res.on("end", () => {
+          if (settled) return;
+          settled = true;
+          const merged = new Uint8Array(total);
+          let off = 0;
+          for (const c of chunks) {
+            merged.set(c, off);
+            off += c.byteLength;
+          }
+          const headers: Record<string, string> = {};
+          const loc = res.headers.location;
+          if (typeof loc === "string") headers.location = loc;
+          const ct: unknown = res.headers["content-type"];
+          if (typeof ct === "string") headers["content-type"] = ct;
+          else if (Array.isArray(ct)) headers["content-type"] = ct.join(", ");
+          resolve({ status: res.statusCode ?? 0, headers, body: merged });
+        });
+        res.on("error", fail);
       }
-      chunks.push(value);
-    }
-  } finally {
-    reader.releaseLock();
-  }
-  const merged = new Uint8Array(total);
-  let off = 0;
-  for (const c of chunks) {
-    merged.set(c, off);
-    off += c.byteLength;
-  }
-  return new TextDecoder("utf-8", { fatal: false }).decode(merged);
+    );
+    req.on("timeout", () => req.destroy(new SafeFetchError("fetch_failed")));
+    req.on("error", reject);
+    req.end();
+  });
 }
 
 /** HTTPS-only page fetch with DNS, redirect, size, and type guards. Never executes scripts. */
 export async function fetchHtmlSafe(startUrl: string, opts: SafeFetchOpts = {}): Promise<{ html: string; finalUrl: string }> {
-  const fetchFn = opts.fetchFn ?? fetch;
+  const transport = opts.transport ?? defaultPinnedTransport;
   const lookupFn = opts.lookupFn ?? defaultLookup;
   const maxRedirects = opts.maxRedirects ?? MAX_REDIRECTS;
   const maxBytes = opts.maxBytes ?? MAX_BYTES;
@@ -318,49 +390,33 @@ export async function fetchHtmlSafe(startUrl: string, opts: SafeFetchOpts = {}):
       throw new SafeFetchError("dns_failed");
     }
     if (addrs.length === 0 || !addrs.every(isPublicIp)) throw new SafeFetchError("private_ip");
-    const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), opts.timeoutMs ?? FETCH_TIMEOUT_MS);
-    let res: Response;
+    // Pin the connection to a validated address. The transport must dial
+    // exactly this IP while keeping TLS verification and Host tied to the
+    // real hostname, so a changed DNS answer mid-request cannot reroute it.
+    const ip = addrs[0];
+    let res: PinnedTransportResult;
     try {
-      res = await fetchFn(url, {
-        signal: ctrl.signal,
-        redirect: "manual",
+      res = await transport({
+        url,
+        ip,
+        timeoutMs: opts.timeoutMs ?? FETCH_TIMEOUT_MS,
         headers: { "user-agent": "AnghkooeyContactBot/1.0", accept: "text/html" },
       });
-    } catch {
-      clearTimeout(timer);
+    } catch (e) {
+      if (e instanceof SafeFetchError) throw e;
       throw new SafeFetchError("fetch_failed");
     }
-    clearTimeout(timer);
+    if (res.body.byteLength > maxBytes) throw new SafeFetchError("too_large");
     if (res.status >= 300 && res.status < 400) {
-      const loc = res.headers.get("location");
-      try {
-        if (res.body) await res.body.cancel().catch(() => {});
-      } catch {
-        // best effort
-      }
+      const loc = res.headers.location;
       if (!loc || hop === maxRedirects) throw new SafeFetchError(hop === maxRedirects ? "too_many_redirects" : "bad_redirect");
       url = new URL(loc, url).toString();
       continue;
     }
-    if (!res.ok) {
-      try {
-        if (res.body) await res.body.cancel().catch(() => {});
-      } catch {
-        // best effort
-      }
-      throw new SafeFetchError("bad_status");
-    }
-    const contentType = res.headers.get("content-type") ?? "";
-    if (!contentType.includes("text/html")) {
-      try {
-        if (res.body) await res.body.cancel().catch(() => {});
-      } catch {
-        // best effort
-      }
-      throw new SafeFetchError("not_html");
-    }
-    return { html: await readBounded(res, maxBytes), finalUrl: url };
+    if (res.status < 200 || res.status >= 300) throw new SafeFetchError("bad_status");
+    const contentType = res.headers["content-type"] ?? "";
+    if (!contentType.includes("text/html")) throw new SafeFetchError("not_html");
+    return { html: new TextDecoder("utf-8", { fatal: false }).decode(res.body), finalUrl: url };
   }
   throw new SafeFetchError("too_many_redirects");
 }
@@ -532,12 +588,29 @@ export async function discoverHotelContact(
   }
   let emails = extractEmails(page.html);
   let evidenceUrl = page.finalUrl;
+  // A redirect landing on a booking platform is not the hotel's own site.
+  if (isBookingPlatformUrl(evidenceUrl)) {
+    return {
+      status: "contact_not_found",
+      email: null,
+      sourceUrl: null,
+      note: "Page redirects to a booking platform or directory, not the hotel's own site.",
+    };
+  }
   if (emails.length === 0 && used < maxFetches) {
     const contactLink = findContactLink(page.html, page.finalUrl);
     if (contactLink) {
       try {
         used += 1;
         const contact = await fetchHtmlSafe(contactLink, opts);
+        if (isBookingPlatformUrl(contact.finalUrl)) {
+          return {
+            status: "contact_not_found",
+            email: null,
+            sourceUrl: null,
+            note: "Page redirects to a booking platform or directory, not the hotel's own site.",
+          };
+        }
         emails = extractEmails(contact.html);
         evidenceUrl = contact.finalUrl;
         page = contact;
@@ -554,7 +627,8 @@ export async function discoverHotelContact(
       status: "verified",
       email: emails[0],
       sourceUrl: evidenceUrl,
-      note: `Address published on the hotel page (${evidenceUrl}).`,
+      // Name match on the hotel's own page is evidence, not proof of official control.
+      note: `Address published on the hotel's own site page that names the property (${evidenceUrl}).`,
     };
   }
   return {

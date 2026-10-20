@@ -264,6 +264,18 @@ export async function handleMessage(input: HandleMessageInput): Promise<ChatResu
           budget: tripParams.budget,
           adults: 2,
         };
+        // A changed trip invalidates the previous shortlist first, so a
+        // failed search never leaves old-trip candidates looking current.
+        try {
+          const { invalidateStaleShortlist } = await import("./hotel-contacts");
+          await invalidateStaleShortlist(canonicalUserId, {
+            destination: tripParams.destination,
+            checkIn: stay.checkIn,
+            checkOut: stay.checkOut,
+          });
+        } catch {
+          // Shortlist is auxiliary; the brief and search carry on.
+        }
         hotels = await searchHotels({
           destination: tripParams.destination,
           checkIn: dates.checkIn,

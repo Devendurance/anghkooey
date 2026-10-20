@@ -10,6 +10,7 @@ import {
   isBookingPlatformUrl,
   isHotelsCommand,
   isPublicIp,
+  isSameTrip,
   isShortlistUsable,
   isValidContactEmail,
   pageMentionsHotel,
@@ -18,8 +19,21 @@ import {
 
 const PUBLIC_IP = "93.184.216.34";
 const lookupOk = async () => [PUBLIC_IP];
-const htmlRes = (html: string, contentType = "text/html") =>
-  new Response(html, { status: 200, headers: { "content-type": contentType } });
+const enc = (s: string) => new TextEncoder().encode(s);
+type StubPage = { status?: number; headers?: Record<string, string>; body?: string };
+const transportFor = (pages: Record<string, StubPage>, calls: string[] = []) => {
+  const t = async (args: { url: string; ip: string }) => {
+    calls.push(`${args.url} via ${args.ip}`);
+    const p = pages[args.url];
+    if (!p) throw new Error(`unexpected url ${args.url}`);
+    return {
+      status: p.status ?? 200,
+      headers: { "content-type": "text/html", ...(p.headers ?? {}) },
+      body: enc(p.body ?? ""),
+    };
+  };
+  return { transport: t as never, calls };
+};
 
 describe("hotel selection commands (no DB, no network)", () => {
   it("parses CONTACT selections strictly", () => {
@@ -125,119 +139,130 @@ describe("SSRF guards (no DB, stubbed network)", () => {
 
   it("fetches a plain page and rejects http, private, and non-html targets", async () => {
     const ok = await fetchHtmlSafe("https://riverside-hotel.com/", {
-      fetchFn: (async () => htmlRes("<html><body>hi</body></html>")) as unknown as typeof fetch,
+      transport: transportFor({ "https://riverside-hotel.com/": { body: "<html><body>hi</body></html>" } }).transport,
       lookupFn: lookupOk,
     });
     expect(ok.finalUrl).toBe("https://riverside-hotel.com/");
     expect(ok.html).toContain("hi");
 
-    const denies: [string, () => Promise<never>][] = [];
-    void denies;
     await expect(
       fetchHtmlSafe("http://riverside-hotel.com/", {
-        fetchFn: (async () => htmlRes("x")) as unknown as typeof fetch,
+        transport: transportFor({}).transport,
         lookupFn: lookupOk,
       })
     ).rejects.toMatchObject({ code: "not_https" });
     await expect(
       fetchHtmlSafe("https://internal.local/", {
-        fetchFn: (async () => htmlRes("x")) as unknown as typeof fetch,
+        transport: transportFor({}).transport,
         lookupFn: lookupOk,
       })
     ).rejects.toMatchObject({ code: "blocked_host" });
     await expect(
       fetchHtmlSafe("https://riverside-hotel.com/", {
-        fetchFn: (async () => htmlRes("x")) as unknown as typeof fetch,
+        transport: transportFor({}).transport,
         lookupFn: async () => ["10.0.0.5"],
       })
     ).rejects.toMatchObject({ code: "private_ip" });
     await expect(
       fetchHtmlSafe("https://riverside-hotel.com/", {
-        fetchFn: (async () => htmlRes("{}", "application/json")) as unknown as typeof fetch,
+        transport: transportFor({ "https://riverside-hotel.com/": { body: "{}", headers: { "content-type": "application/json" } } }).transport,
         lookupFn: lookupOk,
       })
     ).rejects.toMatchObject({ code: "not_html" });
     await expect(
       fetchHtmlSafe("https://riverside-hotel.com/", {
-        fetchFn: (async () => new Response("nope", { status: 404, headers: { "content-type": "text/html" } })) as unknown as typeof fetch,
+        transport: transportFor({ "https://riverside-hotel.com/": { status: 404, body: "nope" } }).transport,
         lookupFn: lookupOk,
       })
     ).rejects.toMatchObject({ code: "bad_status" });
     await expect(
       fetchHtmlSafe("https://riverside-hotel.com/big", {
-        fetchFn: (async () => htmlRes("x".repeat(200))) as unknown as typeof fetch,
+        transport: transportFor({ "https://riverside-hotel.com/big": { body: "x".repeat(200) } }).transport,
         lookupFn: lookupOk,
         maxBytes: 100,
       })
     ).rejects.toMatchObject({ code: "too_large" });
   });
 
+  it("dials the validated IP, never the hostname", async () => {
+    const { transport, calls } = transportFor({ "https://pinned.example.com/": { body: "<html><body>ok</body></html>" } });
+    const ok = await fetchHtmlSafe("https://pinned.example.com/", {
+      transport,
+      lookupFn: async () => ["203.0.113.7"],
+    });
+    expect(ok.html).toContain("ok");
+    expect(calls).toEqual(["https://pinned.example.com/ via 203.0.113.7"]);
+  });
+
   it("validates every redirect hop and caps the chain", async () => {
-    const hop = (loc: string, status = 302) =>
-      new Response(null, { status, headers: { location: loc } });
-    const final = htmlRes("<html><body>final</body></html>");
     const chain = ["https://a.example.com/1", "https://a.example.com/2", "https://a.example.com/3"];
-    const fetchFn = (async (url: string) => {
-      const i = chain.indexOf(url);
-      if (i >= 0 && i < chain.length - 1) return hop(chain[i + 1]);
-      if (url === chain[chain.length - 1]) return final;
-      throw new Error(`unexpected ${url}`);
-    }) as unknown as typeof fetch;
-    const ok = await fetchHtmlSafe(chain[0], { fetchFn, lookupFn: lookupOk });
+    const pages: Record<string, { status?: number; headers?: Record<string, string>; body?: string }> = {};
+    chain.forEach((u, i) => {
+      pages[u] = i < chain.length - 1 ? { status: 302, headers: { location: chain[i + 1] }, body: "" } : { body: "<html><body>final</body></html>" };
+    });
+    const ok = await fetchHtmlSafe(chain[0], { transport: transportFor(pages).transport, lookupFn: lookupOk });
     expect(ok.finalUrl).toBe(chain[chain.length - 1]);
 
     await expect(
       fetchHtmlSafe("https://a.example.com/", {
-        fetchFn: (async () => hop("http://a.example.com/weak")) as unknown as typeof fetch,
+        transport: transportFor({ "https://a.example.com/": { status: 302, headers: { location: "http://a.example.com/weak" }, body: "" } }).transport,
         lookupFn: lookupOk,
       })
     ).rejects.toMatchObject({ code: "not_https" });
     await expect(
       fetchHtmlSafe("https://a.example.com/", {
-        fetchFn: (async () => hop("https://evil.internal/x")) as unknown as typeof fetch,
+        transport: transportFor({ "https://a.example.com/": { status: 302, headers: { location: "https://evil.internal/x" }, body: "" } }).transport,
         lookupFn: lookupOk,
       })
     ).rejects.toMatchObject({ code: "blocked_host" });
     await expect(
       fetchHtmlSafe("https://a.example.com/", {
-        fetchFn: (async () => hop("https://evil.example.com/x")) as unknown as typeof fetch,
+        transport: transportFor({ "https://a.example.com/": { status: 302, headers: { location: "https://evil.example.com/x" }, body: "" } }).transport,
         lookupFn: async (h: string) => (h === "evil.example.com" ? ["10.0.0.9"] : [PUBLIC_IP]),
       })
     ).rejects.toMatchObject({ code: "private_ip" });
-    const loop = (async () => hop("https://a.example.com/loop")) as unknown as typeof fetch;
-    await expect(fetchHtmlSafe("https://a.example.com/loop", { fetchFn: loop, lookupFn: lookupOk, maxRedirects: 2 })).rejects.toMatchObject({
-      code: "too_many_redirects",
-    });
+    await expect(
+      fetchHtmlSafe("https://a.example.com/loop", {
+        transport: transportFor({ "https://a.example.com/loop": { status: 302, headers: { location: "https://a.example.com/loop" }, body: "" } }).transport,
+        lookupFn: lookupOk,
+        maxRedirects: 2,
+      })
+    ).rejects.toMatchObject({ code: "too_many_redirects" });
   });
 });
 
 describe("contact discovery honesty (stubbed pages)", () => {
   it("never fetches booking platforms and reports them honestly", async () => {
-    const fetchFn = vi.fn((async () => htmlRes("x")) as unknown as typeof fetch);
+    const { transport, calls } = transportFor({});
+    const seen = vi.fn(transport);
     const r = await discoverHotelContact(
       { name: "Riverside Hotel", sourceUrl: "https://www.booking.com/hotel/gb/example.html" },
-      { fetchFn, lookupFn: lookupOk }
+      { transport: seen as never, lookupFn: lookupOk }
     );
     expect(r).toMatchObject({ status: "contact_not_found", email: null });
-    expect(fetchFn).not.toHaveBeenCalled();
+    expect(seen).not.toHaveBeenCalled();
+    expect(calls).toHaveLength(0);
   });
 
   it("verifies an address on the hotel's own page", async () => {
-    const fetchFn = (async () =>
-      htmlRes("<html><body><h1>Riverside Hotel</h1><a href=\"mailto:stay@riverside-hotel.com\">Reservations</a></body></html>")) as unknown as typeof fetch;
+    const { transport } = transportFor({
+      "https://riverside-hotel.com/rooms": { body: '<html><body><h1>Riverside Hotel</h1><a href="mailto:stay@riverside-hotel.com">Reservations</a></body></html>' },
+    });
     const r = await discoverHotelContact(
       { name: "Riverside Hotel", sourceUrl: "https://riverside-hotel.com/rooms" },
-      { fetchFn, lookupFn: lookupOk }
+      { transport, lookupFn: lookupOk }
     );
     expect(r).toMatchObject({ status: "verified", email: "stay@riverside-hotel.com" });
     expect(r.sourceUrl).toBe("https://riverside-hotel.com/rooms");
   });
 
   it("marks found-but-unconfirmed addresses incomplete instead of verified", async () => {
-    const fetchFn = (async () => htmlRes("<html><body><p>Partner links</p><a href=\"mailto:info@other-travel.com\">x</a></body></html>")) as unknown as typeof fetch;
+    const { transport } = transportFor({
+      "https://riverside-hotel.com/rooms": { body: '<html><body><p>Partner links</p><a href="mailto:info@other-travel.com">x</a></body></html>' },
+    });
     const r = await discoverHotelContact(
       { name: "Riverside Hotel", sourceUrl: "https://riverside-hotel.com/rooms" },
-      { fetchFn, lookupFn: lookupOk }
+      { transport, lookupFn: lookupOk }
     );
     expect(r.status).toBe("incomplete");
     expect(r.email).toBe("info@other-travel.com");
@@ -247,37 +272,45 @@ describe("contact discovery honesty (stubbed pages)", () => {
     const miss = await discoverHotelContact(
       { name: "Riverside Hotel", sourceUrl: "https://riverside-hotel.com/rooms" },
       {
-        fetchFn: (async () => htmlRes("<html><body><h1>Rooms</h1></body></html>")) as unknown as typeof fetch,
+        transport: transportFor({ "https://riverside-hotel.com/rooms": { body: "<html><body><h1>Rooms</h1></body></html>" } }).transport,
         lookupFn: lookupOk,
       }
     );
     expect(miss).toMatchObject({ status: "contact_not_found", email: null });
 
-    let calls = 0;
-    const hop = (async (url: string) => {
-      calls += 1;
-      if (url === "https://riverside-hotel.com/rooms") {
-        return htmlRes('<html><body><h1>Riverside Hotel rooms</h1><a href="/contact">Contact us</a></body></html>');
-      }
-      return htmlRes('<html><body><h1>Riverside Hotel contact</h1><a href="mailto:stay@riverside-hotel.com">x</a></body></html>');
-    }) as unknown as typeof fetch;
+    const pages = {
+      "https://riverside-hotel.com/rooms": { body: '<html><body><h1>Riverside Hotel rooms</h1><a href="/contact">Contact us</a></body></html>' },
+      "https://riverside-hotel.com/contact": { body: '<html><body><h1>Riverside Hotel contact</h1><a href="mailto:stay@riverside-hotel.com">x</a></body></html>' },
+    };
+    const { transport, calls } = transportFor(pages);
     const found = await discoverHotelContact(
       { name: "Riverside Hotel", sourceUrl: "https://riverside-hotel.com/rooms" },
-      { fetchFn: hop, lookupFn: lookupOk }
+      { transport, lookupFn: lookupOk }
     );
     expect(found).toMatchObject({ status: "verified", email: "stay@riverside-hotel.com" });
-    expect(calls).toBe(2);
+    expect(calls).toHaveLength(2);
+  });
+
+  it("treats redirects to booking platforms as not the hotel's own site", async () => {
+    const { transport } = transportFor({
+      "https://riverside-hotel.com/rooms": { status: 302, headers: { location: "https://www.booking.com/hotel/gb/x.html" }, body: "" },
+      "https://www.booking.com/hotel/gb/x.html": { body: "<html><body><h1>Riverside Hotel</h1><a href=\"mailto:stay@booking.com\">x</a></body></html>" },
+    });
+    const r = await discoverHotelContact(
+      { name: "Riverside Hotel", sourceUrl: "https://riverside-hotel.com/rooms" },
+      { transport, lookupFn: lookupOk }
+    );
+    expect(r).toMatchObject({ status: "contact_not_found", email: null });
+    expect(r.note).toMatch(/booking platform/);
   });
 
   it("treats unreadable pages as incomplete, never verified", async () => {
+    const transport = (async () => {
+      throw new Error("socket hang up");
+    }) as never;
     const r = await discoverHotelContact(
       { name: "Riverside Hotel", sourceUrl: "https://riverside-hotel.com/rooms" },
-      {
-        fetchFn: (async () => {
-          throw new Error("socket hang up");
-        }) as unknown as typeof fetch,
-        lookupFn: lookupOk,
-      }
+      { transport, lookupFn: lookupOk }
     );
     expect(r).toMatchObject({ status: "incomplete", email: null });
   });
@@ -310,13 +343,25 @@ describe("shortlist presentation (no DB, no network)", () => {
     ],
   };
 
-  it("lists candidates with domains, never full URLs or invented fields", () => {
+  it("lists candidates with domains and honest currency, never full URLs or invented fields", () => {
     const msg = formatShortlistMessage(view);
     expect(msg).toContain("1. Riverside Hotel");
-    expect(msg).toContain("$180");
+    expect(msg).toContain("180 USD");
+    expect(msg).not.toContain("$180");
     expect(msg).toContain("riverside-hotel.com");
     expect(msg).not.toContain("https://");
     expect(msg).toMatch(/observed and indicative/);
+    const noCurrency = formatShortlistMessage({
+      ...view,
+      items: [{ ...view.items[0], rateAmount: 200, rateCurrency: null }],
+    });
+    expect(noCurrency).toContain("200 observed nightly (currency unknown)");
+    const eur = formatShortlistMessage({
+      ...view,
+      items: [{ ...view.items[0], rateAmount: 150, rateCurrency: "EUR" }],
+    });
+    expect(eur).toContain("150 EUR");
+    expect(eur).not.toContain("$");
   });
 
   it("shows only verified addresses and honest misses", () => {
@@ -327,12 +372,22 @@ describe("shortlist presentation (no DB, no network)", () => {
     expect(msg).toContain("stay@riverside-hotel.com");
     expect(msg).toContain("no verified email");
     expect(msg).not.toContain("guaranteed");
+    expect(msg).toContain("EMAIL drafts to the test inbox only");
+    expect(msg).not.toMatch(/draft an inquiry once you have a verified contact/);
   });
 
   it("gates selections on active status and future dates", () => {
     expect(isShortlistUsable({ status: "active", checkIn: "2026-11-12" }, "2026-10-18")).toBe(true);
     expect(isShortlistUsable({ status: "stale", checkIn: "2026-11-12" }, "2026-10-18")).toBe(false);
     expect(isShortlistUsable({ status: "active", checkIn: "2026-10-01" }, "2026-10-18")).toBe(false);
+  });
+
+  it("detects changed trips for pre-search invalidation", () => {
+    const base = { destination: "London", checkIn: "2026-11-12", checkOut: "2026-11-17" };
+    expect(isSameTrip(base, { ...base })).toBe(true);
+    expect(isSameTrip(base, { ...base, destination: "london " })).toBe(true);
+    expect(isSameTrip(base, { ...base, checkOut: "2026-11-18" })).toBe(false);
+    expect(isSameTrip(base, { ...base, destination: "Paris" })).toBe(false);
   });
 });
 
@@ -418,6 +473,22 @@ dbSuite("hotel shortlist persistence (real Neon, throwaway identities, no Gmail 
       ).toBe(true);
       const again = await mod.getActiveShortlist(user);
       expect(again?.items[0]).toMatchObject({ contactEmail: "stay@hotel1-stay.com", contactStatus: "verified" });
+    } finally {
+      await cleanup(sql, user);
+    }
+  }, 60000);
+
+  it("invalidates the old shortlist when the trip changes, keeps it for the same trip", async () => {
+    const { user, mod, sql } = await setup();
+    try {
+      await mod.saveShortlist({ canonicalUserId: user, destination: "London", checkIn: "2026-11-12", checkOut: "2026-11-16", candidates: candidates(2) });
+      await mod.invalidateStaleShortlist(user, { destination: "London", checkIn: "2026-11-12", checkOut: "2026-11-16" });
+      expect(await mod.getActiveShortlist(user)).not.toBeNull();
+      await mod.invalidateStaleShortlist(user, { destination: "London", checkIn: "2026-11-12", checkOut: "2026-11-17" });
+      expect(await mod.getActiveShortlist(user)).toBeNull();
+      await mod.saveShortlist({ canonicalUserId: user, destination: "Paris", checkIn: "2026-12-01", checkOut: "2026-12-03", candidates: candidates(1) });
+      await mod.invalidateStaleShortlist(user, { destination: "paris ", checkIn: "2026-12-01", checkOut: "2026-12-03" });
+      expect((await mod.getActiveShortlist(user))?.destination).toBe("Paris");
     } finally {
       await cleanup(sql, user);
     }
