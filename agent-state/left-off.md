@@ -1,5 +1,5 @@
 # Current checkpoint
-- Task: Gmail-D test-mode unblock and contact diagnostics complete and verified, ready to commit.
-- Done: TEST batches prepare without verified contacts with honest labeling, execution-time recipient revalidation against the controlled inbox, [TEST] subjects, classified transport errors with validated-IP failover, redirect-to-platform rejection. New tests pass. Typecheck, eslint, build pass; 202 passed 31 skipped across 22 suites (videos pre-existing failure unrelated).
-- Next: commit and push, then owner pulls both hosts, restarts worker, runs the INQUIRE 1,2 live test. Untested here: real Gmail API, real page fetches, DB paths, live iMessage flow.
+- Task: Multi-channel contact discovery and recovery complete and verified, ready to commit.
+- Done: reservations-email, contact-form, phone, and messaging extraction with property vs central attribution; LIVE gate requires verified reservations email; diagnose:hotel owner script; honest iMessage copy distinguishing reachability from Gmail test mode. New tests pass. Typecheck, eslint, build pass; 216 passed 34 skipped across 22 suites (videos pre-existing failure unrelated).
+- Next: commit and push, then owner runs migrate (008), pulls both hosts, restarts worker, runs the CONTACT 1,2 live verification. Untested here: real Gmail API, real page fetches, DB paths, live iMessage flow.
 - Evidence limits: stubbed transport/DNS/Google, static checks only. No live email sent. No credentials in repo.

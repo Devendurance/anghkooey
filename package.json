@@ -16,6 +16,7 @@
     "worker:start": "tsx workers/photon-worker.ts",
     "photon:readiness": "tsx scripts/photon-readiness.ts",
     "channel:evidence": "tsx scripts/channel-evidence.ts",
+    "diagnose:hotel": "tsx scripts/diagnose-hotel-url.ts",
     "identity:diagnose": "tsx scripts/identity-diagnose.ts"
   },
   "dependencies": {

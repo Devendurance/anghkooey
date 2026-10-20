@@ -1,14 +1,21 @@
 import { describe, expect, it, vi } from "vitest";
+import type { DiscoveryResult } from "../src/server/hotel-contacts";
 import {
+  classifyEmailRole,
   classifyTransportError,
+  diagnoseHotelUrl,
   discoverHotelContact,
+  extractContactForms,
   extractEmails,
+  extractMessagingLinks,
+  extractPhones,
   fetchHtmlSafe,
   findContactLink,
   formatContactResults,
   formatShortlistMessage,
   isBlockedHostname,
   isBookingPlatformUrl,
+  isHotelGroupDomain,
   isHotelsCommand,
   isPublicIp,
   isSameTrip,
@@ -97,8 +104,55 @@ describe("transport failure classification (no DB, no network)", () => {
       { name: "Riverside Hotel", sourceUrl: "https://w.example.com/rate" },
       { transport: transportFor(pages).transport, lookupFn: lookupOk }
     );
-    expect(d).toMatchObject({ status: "incomplete", email: null });
-    expect(d.note).toContain("rate_limited");
+    expect(d).toMatchObject({ status: "incomplete", email: null, retryable: true });
+    expect(d.note).toMatch(/rate-limited|rate limited/i);
+  });
+});
+
+describe("contact email roles and group domains (no DB, no network)", () => {
+  it("classifies reservations, general, and non-booking addresses", () => {
+    for (const l of ["stay", "reservations", "booking", "book", "concierge", "frontdesk", "reception", "welcome", "rooms"]) {
+      expect(classifyEmailRole(l)).toBe("reservations");
+    }
+    expect(classifyEmailRole("info")).toBe("general");
+    expect(classifyEmailRole("contact")).toBe("general");
+    expect(classifyEmailRole("hello")).toBe("general");
+    expect(classifyEmailRole("john.smith")).toBe("general");
+    for (const l of ["privacy", "support", "help", "accessibility", "jobs", "press", "noreply", "abuse", "dpo", "newsletter"]) {
+      expect(classifyEmailRole(l)).toBe("nonbooking");
+    }
+  });
+
+  it("recognizes hotel-group domains without guessing affiliation", () => {
+    expect(isHotelGroupDomain("www.marriott.com")).toBe(true);
+    expect(isHotelGroupDomain("marriott.com")).toBe(true);
+    expect(isHotelGroupDomain("book.ihg.com")).toBe(true);
+    expect(isHotelGroupDomain("riverside-hotel.com")).toBe(false);
+    expect(isHotelGroupDomain("marriott.com.evil.com")).toBe(false);
+    expect(isHotelGroupDomain("")).toBe(false);
+  });
+});
+
+describe("multi-channel extraction (no DB, no network)", () => {
+  it("extracts phone numbers from tel links and text", () => {
+    const html = `<a href="tel:+1-800-555-0100">Call</a> <p>Or +44 20 7946 0000 after hours.</p>`;
+    const phones = extractPhones(html);
+    expect(phones).toContain("+18005550100");
+    expect(phones).toContain("+442079460000");
+    expect(extractPhones("<p>Call 555 for help.</p>")).toEqual([]);
+  });
+
+  it("finds same-host contact forms and ignores off-site or newsletter forms", () => {
+    const html = `<form action="/contact" method="post"><label>Email</label><input type="email" name="e"><textarea name="m"></textarea><button>Send enquiry</button></form>
+      <form action="https://external.example.com/x"><input type="email"></form>
+      <form action="/newsletter"><input type="email"><button>Subscribe</button></form>`;
+    const forms = extractContactForms(html, "https://riverside-hotel.com/rooms");
+    expect(forms).toEqual(["https://riverside-hotel.com/contact"]);
+  });
+
+  it("finds official messaging links and ignores other hosts", () => {
+    const html = `<a href="https://wa.me/15550100">WhatsApp</a> <a href="https://evil.example.com/wa">x</a> <a href="https://t.me/riversidehotel">Telegram</a>`;
+    expect(extractMessagingLinks(html)).toEqual(["https://wa.me/15550100", "https://t.me/riversidehotel"]);
   });
 });
 
@@ -325,7 +379,7 @@ describe("contact discovery honesty (stubbed pages)", () => {
 
   it("marks found-but-unconfirmed addresses incomplete instead of verified", async () => {
     const { transport } = transportFor({
-      "https://riverside-hotel.com/rooms": { body: '<html><body><p>Partner links</p><a href="mailto:info@other-travel.com">x</a></body></html>' },
+      "https://riverside-hotel.com/rooms": { body: '<html><body><h1>Riverside Hotel</h1><p>Partner links</p><a href="mailto:info@other-travel.com">x</a></body></html>' },
     });
     const r = await discoverHotelContact(
       { name: "Riverside Hotel", sourceUrl: "https://riverside-hotel.com/rooms" },
@@ -381,6 +435,154 @@ describe("contact discovery honesty (stubbed pages)", () => {
     );
     expect(r).toMatchObject({ status: "incomplete", email: null });
   });
+
+  it("fails over to the next validated IP without leaking addresses", async () => {
+    const tried: string[] = [];
+    const transport = (async (args: { url: string; ip: string }) => {
+      tried.push(args.ip);
+      if (args.ip === "203.0.113.7") {
+        const err = new Error("socket hang up") as Error & { code?: string };
+        err.code = "ECONNREFUSED";
+        throw err;
+      }
+      return { status: 200, headers: { "content-type": "text/html" }, body: enc("<html><body><h1>Riverside Hotel</h1><a href=\"mailto:stay@riverside-hotel.com\">x</a></body></html>") };
+    }) as never;
+    const r = await discoverHotelContact(
+      { name: "Riverside Hotel", sourceUrl: "https://riverside-hotel.com/rooms" },
+      { transport, lookupFn: async () => ["203.0.113.7", "203.0.113.8"] }
+    );
+    expect(r).toMatchObject({ status: "verified", email: "stay@riverside-hotel.com" });
+    expect(tried).toEqual(["203.0.113.7", "203.0.113.8"]);
+  });
+
+  it("maps blocked, rate-limited, and provider errors distinctly", async () => {
+    for (const [status, code] of [
+      [403, "blocked_page"],
+      [429, "rate_limited"],
+      [500, "provider_error"],
+    ] as const) {
+      const { transport } = transportFor({
+        "https://riverside-hotel.com/rooms": { status, body: "no" },
+      });
+      await expect(
+        fetchHtmlSafe("https://riverside-hotel.com/rooms", { transport, lookupFn: lookupOk })
+      ).rejects.toMatchObject({ code });
+    }
+  });
+
+  it("verifies central reservations addresses on group domains", async () => {
+    const { transport } = transportFor({
+      "https://www.marriott.com/hotels/riverside": {
+        body: '<html><body><h1>Riverside Hotel</h1><a href="mailto:reservations@marriott.com">Book</a></body></html>',
+      },
+    });
+    const r = await discoverHotelContact(
+      { name: "Riverside Hotel", sourceUrl: "https://www.marriott.com/hotels/riverside" },
+      { transport, lookupFn: lookupOk }
+    );
+    expect(r).toMatchObject({ status: "verified", method: "email", tier: "central" });
+    expect(r.note).toMatch(/[Cc]entral/);
+  });
+
+  it("treats generic inboxes as unconfirmed, never verified", async () => {
+    const { transport } = transportFor({
+      "https://riverside-hotel.com/rooms": {
+        body: '<html><body><h1>Riverside Hotel</h1><a href="mailto:info@riverside-hotel.com">Contact</a></body></html>',
+      },
+    });
+    const r = await discoverHotelContact(
+      { name: "Riverside Hotel", sourceUrl: "https://riverside-hotel.com/rooms" },
+      { transport, lookupFn: lookupOk }
+    );
+    expect(r.status).toBe("incomplete");
+    expect(r.method).toBe("email");
+    expect(r.retryable).toBe(false);
+  });
+
+  it("excludes support and privacy addresses from booking contacts", async () => {
+    const { transport } = transportFor({
+      "https://riverside-hotel.com/rooms": {
+        body: '<html><body><h1>Riverside Hotel</h1><a href="mailto:privacy@riverside-hotel.com">Privacy</a> <a href="mailto:support@riverside-hotel.com">Support</a></body></html>',
+      },
+    });
+    const r = await discoverHotelContact(
+      { name: "Riverside Hotel", sourceUrl: "https://riverside-hotel.com/rooms" },
+      { transport, lookupFn: lookupOk }
+    );
+    expect(r).toMatchObject({ status: "contact_not_found", email: null });
+    expect(r.note).toMatch(/support or privacy/i);
+  });
+
+  it("excludes support and privacy addresses from booking contacts", async () => {
+    const { transport } = transportFor({
+      "https://riverside-hotel.com/rooms": {
+        body: '<html><body><h1>Riverside Hotel</h1><a href="mailto:privacy@riverside-hotel.com">Privacy</a> <a href="mailto:support@riverside-hotel.com">Support</a></body></html>',
+      },
+    });
+    const r = await discoverHotelContact(
+      { name: "Riverside Hotel", sourceUrl: "https://riverside-hotel.com/rooms" },
+      { transport, lookupFn: lookupOk }
+    );
+    expect(r).toMatchObject({ status: "contact_not_found", email: null });
+    expect(r.note).toMatch(/support or privacy/i);
+  });
+
+  it("verifies official forms, phones, and messaging links as their own channel", async () => {
+    const pages = {
+      "https://riverside-hotel.com/rooms": {
+        body: '<html><body><h1>Riverside Hotel</h1><form action="/contact" method="post"><input type="email" name="e"><textarea name="m"></textarea><button>Send enquiry</button></form><a href="tel:+1-800-555-0100">Call</a> <a href="https://wa.me/15550100">WhatsApp</a></body></html>',
+      },
+    };
+    const { transport } = transportFor(pages);
+    const r = await discoverHotelContact(
+      { name: "No Mention Hotel", sourceUrl: "https://riverside-hotel.com/rooms" },
+      { transport, lookupFn: lookupOk }
+    );
+    expect(r.status).toBe("verified");
+    expect(r.method).toBe("form");
+    expect(r.formUrl).toBe("https://riverside-hotel.com/contact");
+  });
+});
+
+describe("hotel URL diagnostics (no DB, stubbed network)", () => {
+  it("reports staged checks without content, addresses, or URLs", async () => {
+    const { transport } = transportFor({
+      "https://riverside-hotel.com/rooms": {
+        body: '<html><body><h1>Riverside Hotel</h1><a href="mailto:stay@riverside-hotel.com">x</a><form action="/contact"><input type="email"></form><a href="tel:+18005550100">x</a></body></html>',
+      },
+    });
+    const d = await diagnoseHotelUrl("https://riverside-hotel.com/rooms", { transport, lookupFn: lookupOk });
+    expect(d.verdict).toBe("reachable");
+    expect(d.host).toBe("riverside-hotel.com");
+    expect(d.checks.map((c) => c.name)).toEqual(["parse", "source", "dns", "fetch", "signals"]);
+    expect(d.checks.every((c) => typeof c.latencyMs === "number")).toBe(true);
+    expect(d.signals).toMatchObject({ hasEmail: true, hasForm: true, hasPhone: true, hasMessaging: false });
+    expect(JSON.stringify(d)).not.toMatch(/stay@|93\.184|01234/);
+  });
+
+  it("classifies unreachable, blocked, and rate-limited destinations", async () => {
+    const down = await diagnoseHotelUrl("https://riverside-hotel.com/rooms", {
+      transport: (async () => {
+        throw new Error("socket hang up");
+      }) as never,
+      lookupFn: lookupOk,
+    });
+    expect(down.verdict).toBe("connection_failed");
+    const blocked = await diagnoseHotelUrl("https://riverside-hotel.com/rooms", {
+      transport: transportFor({ "https://riverside-hotel.com/rooms": { status: 403, body: "no" } }).transport,
+      lookupFn: lookupOk,
+    });
+    expect(blocked.verdict).toBe("blocked");
+    const limited = await diagnoseHotelUrl("https://riverside-hotel.com/rooms", {
+      transport: transportFor({ "https://riverside-hotel.com/rooms": { status: 429, body: "no" } }).transport,
+      lookupFn: lookupOk,
+    });
+    expect(limited.verdict).toBe("rate_limited");
+    const bad = await diagnoseHotelUrl("not a url at all", { lookupFn: lookupOk });
+    expect(bad.verdict).toBe("bad_url");
+    const agg = await diagnoseHotelUrl("https://www.booking.com/hotel/gb/x.html", { lookupFn: lookupOk });
+    expect(agg.verdict).toBe("aggregator");
+  });
 });
 
 describe("shortlist presentation (no DB, no network)", () => {
@@ -404,6 +606,11 @@ describe("shortlist presentation (no DB, no network)", () => {
         contactEmail: null,
         contactSourceUrl: null,
         contactStatus: "unverified",
+        contactMethod: null,
+        contactKind: null,
+        contactPhone: null,
+        contactFormUrl: null,
+        contactMessagingUrl: null,
         contactVerifiedAt: null,
         contactNote: null,
       },
@@ -432,15 +639,66 @@ describe("shortlist presentation (no DB, no network)", () => {
   });
 
   it("shows only verified addresses and honest misses", () => {
+    const full: DiscoveryResult = {
+      status: "verified",
+      email: "stay@riverside-hotel.com",
+      phone: null,
+      formUrl: null,
+      messagingUrl: null,
+      method: "email",
+      tier: "property",
+      sourceUrl: "https://riverside-hotel.com/contact",
+      note: "ok",
+      retryable: false,
+    };
+    const missing: DiscoveryResult = {
+      status: "contact_not_found",
+      email: null,
+      phone: null,
+      formUrl: null,
+      messagingUrl: null,
+      method: null,
+      tier: null,
+      sourceUrl: null,
+      note: "No public reservations contact found on the hotel page.",
+      retryable: false,
+    };
     const msg = formatContactResults(view, [
-      { position: 1, name: "Riverside Hotel", result: { status: "verified", email: "stay@riverside-hotel.com", sourceUrl: "https://riverside-hotel.com/contact", note: "ok" } },
-      { position: 2, name: "Garden Inn", result: { status: "contact_not_found", email: null, sourceUrl: null, note: "No public contact email found on the hotel page." } },
+      { position: 1, name: "Riverside Hotel", result: full },
+      { position: 2, name: "Garden Inn", result: missing },
     ]);
     expect(msg).toContain("stay@riverside-hotel.com");
-    expect(msg).toContain("no verified email");
+    expect(msg).toContain("Reservations email verified");
+    expect(msg).toContain("No public reservations contact found");
     expect(msg).not.toContain("guaranteed");
     expect(msg).toContain("EMAIL drafts to the test inbox only");
     expect(msg).not.toMatch(/draft an inquiry once you have a verified contact/);
+    const formMsg = formatContactResults(view, [
+      {
+        position: 1,
+        name: "Riverside Hotel",
+        result: { ...full, method: "form", formUrl: "https://riverside-hotel.com/contact", email: null },
+      },
+    ]);
+    expect(formMsg).toContain("Official contact form found");
+    expect(formMsg).not.toContain("stay@riverside-hotel.com");
+    const phoneMsg = formatContactResults(view, [
+      {
+        position: 1,
+        name: "Riverside Hotel",
+        result: { ...full, method: "phone", phone: "+1 800 555 0100", email: null },
+      },
+    ]);
+    expect(phoneMsg).toContain("Hotel phone number verified: +1 800 555 0100");
+    const retryMsg = formatContactResults(view, [
+      {
+        position: 1,
+        name: "Riverside Hotel",
+        result: { ...missing, status: "incomplete", note: "The website timed out.", retryable: true },
+      },
+    ]);
+    expect(retryMsg).toContain("website couldn't be checked");
+    expect(retryMsg).toContain("Try CONTACT 1 again");
   });
 
   it("gates selections on active status and future dates", () => {
@@ -515,7 +773,7 @@ dbSuite("hotel shortlist persistence (real Neon, throwaway identities, no Gmail 
           canonicalUserId: stranger,
           shortlistId: view!.id,
           position: 1,
-          result: { status: "verified", email: "x@y.com", sourceUrl: null, note: "x" },
+          result: { status: "verified", email: "x@y.com", sourceUrl: null, note: "x", phone: null, formUrl: null, messagingUrl: null, method: "email", tier: null, retryable: false },
         })
       ).toBe(false);
     } finally {
@@ -535,7 +793,7 @@ dbSuite("hotel shortlist persistence (real Neon, throwaway identities, no Gmail 
           canonicalUserId: user,
           shortlistId: view!.id,
           position: 1,
-          result: { status: "verified", email: "stay@hotel1-stay.com", sourceUrl: "https://hotel1-stay.com/contact", note: "ok" },
+          result: { status: "verified", email: "stay@hotel1-stay.com", sourceUrl: "https://hotel1-stay.com/contact", note: "ok", phone: null, formUrl: null, messagingUrl: null, method: "email", tier: "property", retryable: false },
         })
       ).toBe(true);
       const again = await mod.getActiveShortlist(user);
@@ -556,6 +814,45 @@ dbSuite("hotel shortlist persistence (real Neon, throwaway identities, no Gmail 
       await mod.saveShortlist({ canonicalUserId: user, destination: "Paris", checkIn: "2026-12-01", checkOut: "2026-12-03", candidates: candidates(1) });
       await mod.invalidateStaleShortlist(user, { destination: "paris ", checkIn: "2026-12-01", checkOut: "2026-12-03" });
       expect((await mod.getActiveShortlist(user))?.destination).toBe("Paris");
+    } finally {
+      await cleanup(sql, user);
+    }
+  }, 60000);
+
+  it("persists contact method, kind, phone, and form details", async () => {
+    const { user, mod, sql } = await setup();
+    try {
+      await mod.saveShortlist({ canonicalUserId: user, destination: "London", checkIn: "2026-11-12", checkOut: "2026-11-16", candidates: candidates(2) });
+      const view = await mod.getActiveShortlist(user);
+      expect(view).not.toBeNull();
+      expect(
+        await mod.saveContactResult({
+          canonicalUserId: user,
+          shortlistId: view!.id,
+          position: 2,
+          result: {
+            status: "verified",
+            email: null,
+            phone: "+442079460000",
+            formUrl: "https://hotel2-stay.com/contact",
+            messagingUrl: null,
+            method: "form",
+            tier: "property",
+            sourceUrl: "https://hotel2-stay.com/contact",
+            note: "Official contact form found.",
+            retryable: false,
+          },
+        })
+      ).toBe(true);
+      const again = await mod.getActiveShortlist(user);
+      expect(again?.items[1]).toMatchObject({
+        contactStatus: "verified",
+        contactEmail: null,
+        contactMethod: "form",
+        contactKind: "property",
+        contactPhone: "+442079460000",
+        contactFormUrl: "https://hotel2-stay.com/contact",
+      });
     } finally {
       await cleanup(sql, user);
     }

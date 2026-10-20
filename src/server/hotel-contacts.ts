@@ -23,6 +23,11 @@ export type ShortlistItemView = {
   contactEmail: string | null;
   contactSourceUrl: string | null;
   contactStatus: string;
+  contactMethod: string | null;
+  contactKind: string | null;
+  contactPhone: string | null;
+  contactFormUrl: string | null;
+  contactMessagingUrl: string | null;
   contactVerifiedAt: string | null;
   contactNote: string | null;
 };
@@ -82,7 +87,8 @@ export async function getActiveShortlist(canonicalUserId: string): Promise<Short
   const l = lists[0];
   const items = await sql`
     select position, name, address, source, source_url, rate_amount, rate_currency,
-      observed_at, contact_email, contact_source_url, contact_status, contact_verified_at, contact_note
+      observed_at, contact_email, contact_source_url, contact_status, contact_method, contact_kind,
+      contact_phone, contact_form_url, contact_messaging_url, contact_verified_at, contact_note
     from hotel_shortlist_items
     where shortlist_id = ${l.id as string}
     order by position asc`;
@@ -105,6 +111,11 @@ export async function getActiveShortlist(canonicalUserId: string): Promise<Short
       contactEmail: (r.contact_email as string | null) ?? null,
       contactSourceUrl: (r.contact_source_url as string | null) ?? null,
       contactStatus: r.contact_status as string,
+      contactMethod: (r.contact_method as string | null) ?? null,
+      contactKind: (r.contact_kind as string | null) ?? null,
+      contactPhone: (r.contact_phone as string | null) ?? null,
+      contactFormUrl: (r.contact_form_url as string | null) ?? null,
+      contactMessagingUrl: (r.contact_messaging_url as string | null) ?? null,
       contactVerifiedAt: r.contact_verified_at ? (r.contact_verified_at as Date).toISOString() : null,
       contactNote: (r.contact_note as string | null) ?? null,
     })),
@@ -140,11 +151,24 @@ export async function invalidateStaleShortlist(canonicalUserId: string, trip: Tr
       and (lower(destination) != lower(${trip.destination}) or check_in != ${trip.checkIn} or check_out != ${trip.checkOut})`;
 }
 
+export type ContactMethod = "email" | "form" | "phone" | "messaging";
+export type ContactTier = "property" | "central";
+export type ContactStatus = "verified" | "contact_not_found" | "incomplete";
+
 export type DiscoveryResult = {
-  status: "verified" | "contact_not_found" | "incomplete";
+  status: ContactStatus;
+  /** Reservations-suitable email. Generic inboxes stay unconfirmed, never verified. */
   email: string | null;
+  phone: string | null;
+  formUrl: string | null;
+  messagingUrl: string | null;
+  method: ContactMethod | null;
+  /** property = hotel's own site, central = hotel-group site. Null unless verified. */
+  tier: ContactTier | null;
   sourceUrl: string | null;
   note: string;
+  /** True when retrying the same CONTACT later could succeed. */
+  retryable: boolean;
 };
 
 /** Ownership-checked contact write. Returns false when the row is not the caller's. */
@@ -159,13 +183,20 @@ export async function saveContactResult(args: {
     select id from hotel_shortlists
     where id = ${args.shortlistId} and user_id = ${args.canonicalUserId} limit 1`;
   if (owned.length === 0) return false;
-  const email = args.result.status === "contact_not_found" ? null : args.result.email;
+  // Only verified contacts persist addresses. Unconfirmed findings stay
+  // in the in-conversation reply, never in the stored record.
+  const verified = args.result.status === "verified";
   await sql`
     update hotel_shortlist_items
-    set contact_email = ${email},
+    set contact_email = ${verified ? args.result.email : null},
       contact_source_url = ${args.result.sourceUrl},
-      contact_status = ${args.result.status === "verified" ? "verified" : args.result.status === "incomplete" ? "unverified" : "contact_not_found"},
-      contact_verified_at = ${args.result.status === "verified" ? sql`now()` : null},
+      contact_status = ${verified ? "verified" : args.result.status === "incomplete" ? "unverified" : "contact_not_found"},
+      contact_method = ${verified ? args.result.method : null},
+      contact_kind = ${verified ? args.result.tier : null},
+      contact_phone = ${verified ? args.result.phone : null},
+      contact_form_url = ${verified ? args.result.formUrl : null},
+      contact_messaging_url = ${verified ? args.result.messagingUrl : null},
+      contact_verified_at = ${verified ? sql`now()` : null},
       contact_note = ${args.result.note.slice(0, 300)}
     where shortlist_id = ${args.shortlistId} and position = ${args.position}`;
   return true;
@@ -215,17 +246,30 @@ export function formatShortlistMessage(s: ShortlistView): string {
   return lines.join("\n");
 }
 
-/** Concise contact results. Verified addresses only; everything else is an honest miss. */
+/** Concise contact results. Distinguishes reachable channels from honest misses. Never invents contacts. */
 export function formatContactResults(
   s: ShortlistView,
   results: { position: number; name: string; result: DiscoveryResult }[]
 ): string {
   const lines = [`Hotel contacts for ${s.destination}:`];
   for (const r of results) {
-    if (r.result.status === "verified" && r.result.email) {
-      lines.push(`${r.position}. ${r.name} — contact verified on the hotel site: ${r.result.email} (via ${shortDomain(r.result.sourceUrl ?? "")})`);
+    const d = r.result;
+    const via = d.sourceUrl ? ` (via ${shortDomain(d.sourceUrl)})` : "";
+    if (d.status === "verified" && d.method === "email" && d.email) {
+      const scope = d.tier === "central" ? "Central reservations" : "Reservations";
+      lines.push(`${r.position}. ${r.name} — ${scope} email verified: ${d.email}${via}.`);
+    } else if (d.status === "verified" && d.method === "form" && d.formUrl) {
+      lines.push(`${r.position}. ${r.name} — Official contact form found${via}. This is not an email address.`);
+    } else if (d.status === "verified" && d.method === "phone" && d.phone) {
+      lines.push(`${r.position}. ${r.name} — Hotel phone number verified: ${d.phone}${via}.`);
+    } else if (d.status === "verified" && d.method === "messaging" && d.messagingUrl) {
+      lines.push(`${r.position}. ${r.name} — Official messaging link found${via}.`);
+    } else if (d.status === "incomplete" && d.retryable) {
+      lines.push(`${r.position}. ${r.name} — website couldn't be checked (${d.note}). Try CONTACT ${r.position} again.`);
+    } else if (d.status === "incomplete") {
+      lines.push(`${r.position}. ${r.name} — no verified contact yet (${d.note})`);
     } else {
-      lines.push(`${r.position}. ${r.name} — no verified email (${r.result.note})`);
+      lines.push(`${r.position}. ${r.name} — ${d.note}`);
     }
   }
   lines.push("EMAIL drafts to the test inbox only. Hotel sends are not enabled yet.");
@@ -596,24 +640,280 @@ export function findContactLink(html: string, baseUrl: string): string | null {
   return null;
 }
 
+/** Local parts that read like a reservations desk rather than a generic inbox. */
+const RESERVATION_LOCALS = new Set([
+  "stay",
+  "stays",
+  "reservation",
+  "reservations",
+  "reserve",
+  "booking",
+  "bookings",
+  "book",
+  "rooms",
+  "concierge",
+  "frontdesk",
+  "front-desk",
+  "reception",
+  "welcome",
+]);
+
+/** Local parts that must never count as a booking contact. */
+const NON_BOOKING_LOCALS = new Set([
+  "noreply",
+  "donotreply",
+  "no-reply",
+  "do-not-reply",
+  "unsubscribe",
+  "list-unsubscribe",
+  "privacy",
+  "dpo",
+  "accessibility",
+  "a11y",
+  "support",
+  "help",
+  "helpdesk",
+  "careers",
+  "jobs",
+  "press",
+  "media",
+  "billing",
+  "invoices",
+  "invoice",
+  "abuse",
+  "postmaster",
+  "webmaster",
+  "newsletter",
+  "marketing",
+]);
+
+export function classifyEmailRole(local: string): "reservations" | "general" | "nonbooking" {
+  const l = local.toLowerCase();
+  if (NON_BOOKING_LOCALS.has(l)) return "nonbooking";
+  if (RESERVATION_LOCALS.has(l)) return "reservations";
+  return "general";
+}
+
+/** Hotel-group domains whose reservations pages may serve many properties. */
+const HOTEL_GROUP_DOMAINS = [
+  "marriott.com",
+  "hilton.com",
+  "hyatt.com",
+  "ihg.com",
+  "holidayinn.com",
+  "accor.com",
+  "choicehotels.com",
+  "wyndhamhotels.com",
+  "bestwestern.com",
+  "radissonhotels.com",
+  "melia.com",
+  "nh-hotels.com",
+  "kempinski.com",
+  "fourseasons.com",
+  "ritzcarlton.com",
+  "shangri-la.com",
+  "mandarinoriental.com",
+  "peninsula.com",
+  "rosewoodhotels.com",
+  "aman.com",
+  "oetkercollection.com",
+  "dorchestercollection.com",
+  "rotana.com",
+  "jumeirah.com",
+  "millenniumhotels.com",
+  "langhamhotels.com",
+];
+
+export function isHotelGroupDomain(host: string): boolean {
+  const h = host.trim().toLowerCase().replace(/\.$/, "");
+  return HOTEL_GROUP_DOMAINS.some((d) => h === d || h.endsWith(`.${d}`));
+}
+
+/** Phone numbers from tel: links first, then plain-text international-style numbers. */
+export function extractPhones(html: string): string[] {
+  const text = decodeEntities(html);
+  const found: string[] = [];
+  const push = (raw: string) => {
+    const digits = raw.replace(/\D/g, "");
+    if (digits.length < 7 || digits.length > 15) return;
+    if (/^0+$/.test(digits)) return;
+    const norm = raw.trim().startsWith("+") ? `+${digits}` : digits;
+    if (!found.includes(norm)) found.push(norm);
+  };
+  for (const m of text.matchAll(/href\s*=\s*["']tel:([^"']+)["']/gi)) push(m[1].split("?")[0]);
+  for (const m of text.matchAll(/(\+\d[\d\s().-]{5,}\d)/g)) push(m[1]);
+  return found.slice(0, 3);
+}
+
+/** Same-host contact/reservation forms only. Never follows off-site actions. */
+export function extractContactForms(html: string, baseUrl: string): string[] {
+  let base: URL;
+  try {
+    base = new URL(baseUrl);
+  } catch {
+    return [];
+  }
+  const out: string[] = [];
+  for (const m of html.matchAll(/<form\b[^>]*>([\s\S]*?)<\/form\s*>/gi)) {
+    const openTag = m[0].slice(0, m[0].indexOf(">") + 1);
+    const innerText = m[1].replace(/<[^>]*>/g, " ");
+    const action =
+      /action\s*=\s*"([^"]*)"/i.exec(openTag)?.[1] ?? /action\s*=\s*'([^']*)'/i.exec(openTag)?.[1] ?? "";
+    if (/mailto:/i.test(action)) continue;
+    const label = `${action} ${innerText}`;
+    if (!/(contact|reserv|book direct|book now|enquir|availability|request)/i.test(label)) continue;
+    let u: URL;
+    try {
+      u = new URL(action || baseUrl, base);
+    } catch {
+      continue;
+    }
+    if (u.protocol !== "https:" || u.hostname.toLowerCase() !== base.hostname.toLowerCase()) continue;
+    const href = u.toString();
+    if (!out.includes(href)) out.push(href);
+    if (out.length >= 2) break;
+  }
+  return out;
+}
+
+const MESSAGING_HOSTS = ["wa.me", "api.whatsapp.com", "m.me", "t.me"];
+
+/** Official messaging links (WhatsApp, Messenger, Telegram) where published. */
+export function extractMessagingLinks(html: string): string[] {
+  const out: string[] = [];
+  for (const m of decodeEntities(html).matchAll(/<a\b[^>]*href="([^"]+)"[^>]*>/gi)) {
+    let u: URL;
+    try {
+      u = new URL(m[1]);
+    } catch {
+      continue;
+    }
+    if (u.protocol !== "https:") continue;
+    const host = u.hostname.toLowerCase().replace(/^www\./, "");
+    if (!MESSAGING_HOSTS.includes(host)) continue;
+    if ((host === "wa.me" || host === "api.whatsapp.com") && !/^\/\d{7,15}/.test(u.pathname)) continue;
+    const href = u.toString();
+    if (!out.includes(href)) out.push(href);
+    if (out.length >= 2) break;
+  }
+  return out;
+}
+
+/** Friendly, jargon-free reason for a failed page read. Raw codes stay in diagnostics. */
+export function friendlyFetchNote(code: string): string {
+  switch (code) {
+    case "timeout":
+      return "The website timed out.";
+    case "connection_failed":
+      return "The website could not be reached.";
+    case "tls_failed":
+      return "The website's secure connection could not be verified.";
+    case "blocked_page":
+      return "The site blocks automated checks.";
+    case "rate_limited":
+      return "The site rate-limited the check.";
+    case "provider_error":
+      return "The website returned a server error.";
+    case "dns_failed":
+      return "The website address could not be resolved.";
+    default:
+      return "The website couldn't be checked.";
+  }
+}
+
+export function isRetryableFetchCode(code: string): boolean {
+  return ["timeout", "connection_failed", "rate_limited", "provider_error", "fetch_failed", "dns_failed"].includes(code);
+}
+
 /**
  * Bounded discovery for one hotel: source page, then at most one same-host
- * contact page. Verified only with a real address on a page that references
- * the hotel. Never guesses addresses from domains.
+ * contact page. Reads email, phone, contact forms, and messaging links.
+ * A reservations address on a page naming the hotel verifies an email
+ * contact; forms, phones, and messaging links verify their own channel.
+ * Generic inboxes stay unconfirmed, support/privacy addresses are excluded,
+ * and nothing is ever guessed from a domain name.
  */
 export async function discoverHotelContact(
   hotel: { name: string; sourceUrl: string },
   opts: SafeFetchOpts & { maxFetches?: number } = {}
 ): Promise<DiscoveryResult> {
   const maxFetches = opts.maxFetches ?? MAX_FETCHES_PER_HOTEL;
+  const miss = (
+    note: string,
+    extra: Partial<DiscoveryResult> = {}
+  ): DiscoveryResult => ({
+    status: "contact_not_found",
+    email: null,
+    phone: null,
+    formUrl: null,
+    messagingUrl: null,
+    method: null,
+    tier: null,
+    sourceUrl: null,
+    note,
+    retryable: false,
+    ...extra,
+  });
+  const unconfirmed = (
+    note: string,
+    extra: Partial<DiscoveryResult> = {}
+  ): DiscoveryResult => ({
+    status: "incomplete",
+    email: null,
+    phone: null,
+    formUrl: null,
+    messagingUrl: null,
+    method: null,
+    tier: null,
+    sourceUrl: null,
+    note,
+    retryable: false,
+    ...extra,
+  });
   if (isBookingPlatformUrl(hotel.sourceUrl)) {
-    return {
-      status: "contact_not_found",
-      email: null,
-      sourceUrl: null,
-      note: "Source is a booking platform or directory, not the hotel's own site.",
-    };
+    return miss("Source is a booking platform or directory, not the hotel's own site.");
   }
+  const hostOf = (u: string): string => {
+    try {
+      return new URL(u).hostname.toLowerCase();
+    } catch {
+      return "";
+    }
+  };
+  const shortHost = (u: string): string => {
+    const h = hostOf(u);
+    try {
+      const url = new URL(u);
+      const path = url.pathname.length > 1 ? url.pathname.slice(0, 40) : "";
+      return `${h.replace(/^www\./, "")}${path}`;
+    } catch {
+      return h.replace(/^www\./, "");
+    }
+  };
+  const tierOf = (u: string): ContactTier => (isHotelGroupDomain(hostOf(u)) ? "central" : "property");
+  const reservationsOn = (html: string, finalUrl: string) => {
+    for (const addr of extractEmails(html)) {
+      if (classifyEmailRole(addr.split("@")[0]) !== "reservations") continue;
+      if (!pageMentionsHotel(html, hotel.name)) continue;
+      const tier = tierOf(finalUrl);
+      return {
+        status: "verified" as const,
+        email: addr,
+        phone: null as string | null,
+        formUrl: null as string | null,
+        messagingUrl: null as string | null,
+        method: "email" as const,
+        tier,
+        sourceUrl: finalUrl,
+        note:
+          tier === "central"
+            ? `Central reservations address published by the hotel group (${shortHost(finalUrl)}).`
+            : `Reservations address published on the hotel's own site page that names the property (${shortHost(finalUrl)}).`,
+        retryable: false,
+      };
+    }
+    return null;
+  };
   let used = 0;
   let page: { html: string; finalUrl: string } | null = null;
   try {
@@ -621,57 +921,238 @@ export async function discoverHotelContact(
     page = await fetchHtmlSafe(hotel.sourceUrl, opts);
   } catch (e) {
     const code = e instanceof SafeFetchError ? e.code : "fetch_failed";
-    return { status: "incomplete", email: null, sourceUrl: null, note: `Could not read the hotel page (${code}).` };
-  }
-  let emails = extractEmails(page.html);
-  let evidenceUrl = page.finalUrl;
-  // A redirect landing on a booking platform is not the hotel's own site.
-  if (isBookingPlatformUrl(evidenceUrl)) {
     return {
-      status: "contact_not_found",
-      email: null,
-      sourceUrl: null,
-      note: "Page redirects to a booking platform or directory, not the hotel's own site.",
+      ...unconfirmed(friendlyFetchNote(code)),
+      retryable: isRetryableFetchCode(code),
     };
   }
-  if (emails.length === 0 && used < maxFetches) {
+  if (isBookingPlatformUrl(page.finalUrl)) {
+    return miss("Page redirects to a booking platform or directory, not the hotel's own site.");
+  }
+  const direct = reservationsOn(page.html, page.finalUrl);
+  if (direct) return direct;
+  if (used < maxFetches) {
     const contactLink = findContactLink(page.html, page.finalUrl);
     if (contactLink) {
       try {
         used += 1;
         const contact = await fetchHtmlSafe(contactLink, opts);
         if (isBookingPlatformUrl(contact.finalUrl)) {
-          return {
-            status: "contact_not_found",
-            email: null,
-            sourceUrl: null,
-            note: "Page redirects to a booking platform or directory, not the hotel's own site.",
-          };
+          return miss("Page redirects to a booking platform or directory, not the hotel's own site.");
         }
-        emails = extractEmails(contact.html);
-        evidenceUrl = contact.finalUrl;
         page = contact;
+        const viaContact = reservationsOn(page.html, page.finalUrl);
+        if (viaContact) return viaContact;
       } catch {
         // Keep the original page for the honest miss below.
       }
     }
   }
-  if (emails.length === 0) {
-    return { status: "contact_not_found", email: null, sourceUrl: null, note: "No public contact email found on the hotel page." };
+  type EmailHit = { addr: string; role: "reservations" | "general"; nameMatch: boolean };
+  const emailHits: EmailHit[] = [];
+  let sawNonBookingOnly = false;
+  for (const addr of extractEmails(page.html)) {
+    const role = classifyEmailRole(addr.split("@")[0]);
+    if (role === "nonbooking") {
+      sawNonBookingOnly = true;
+      continue;
+    }
+    emailHits.push({ addr, role, nameMatch: pageMentionsHotel(page.html, hotel.name) });
   }
-  if (pageMentionsHotel(page.html, hotel.name)) {
+  const forms = extractContactForms(page.html, page.finalUrl);
+  const phones = extractPhones(page.html);
+  const messaging = extractMessagingLinks(page.html);
+  const alternates: string[] = [];
+  if (forms.length > 0) alternates.push("online contact form");
+  if (phones.length > 0) alternates.push("phone");
+  if (messaging.length > 0) alternates.push("messaging link");
+  const also = alternates.length > 1 ? ` Also found: ${alternates.slice(1).join(", ")}.` : "";
+  const tier = tierOf(page.finalUrl);
+  const tierWord = tier === "central" ? "hotel-group" : "hotel's own";
+  if (forms.length > 0) {
     return {
       status: "verified",
-      email: emails[0],
-      sourceUrl: evidenceUrl,
-      // Name match on the hotel's own page is evidence, not proof of official control.
-      note: `Address published on the hotel's own site page that names the property (${evidenceUrl}).`,
+      email: null,
+      phone: phones[0] ?? null,
+      formUrl: forms[0],
+      messagingUrl: messaging[0] ?? null,
+      method: "form",
+      tier,
+      sourceUrl: forms[0],
+      note: `Official contact form found on the ${tierWord} site (${shortHost(forms[0])}).${also}`,
+      retryable: false,
     };
   }
-  return {
-    status: "incomplete",
-    email: emails[0],
-    sourceUrl: evidenceUrl,
-    note: "Found an address but could not confirm it belongs to this hotel.",
+  if (phones.length > 0) {
+    return {
+      status: "verified",
+      email: null,
+      phone: phones[0],
+      formUrl: null,
+      messagingUrl: messaging[0] ?? null,
+      method: "phone",
+      tier,
+      sourceUrl: page.finalUrl,
+      note: `Hotel phone number verified on the ${tierWord} site (${shortHost(page.finalUrl)}). This is not an email address and cannot receive inquiries.${also ? ` Also found: ${alternates.filter((a) => a !== "phone").join(", ")}.` : ""}`,
+      retryable: false,
+    };
+  }
+  if (messaging.length > 0) {
+    return {
+      status: "verified",
+      email: null,
+      phone: null,
+      formUrl: null,
+      messagingUrl: messaging[0],
+      method: "messaging",
+      tier,
+      sourceUrl: page.finalUrl,
+      note: `Official messaging link found on the ${tierWord} site (${shortHost(page.finalUrl)}). This is not an email address.${also ? ` Also found: ${alternates.filter((a) => a !== "messaging link").join(", ")}.` : ""}`,
+      retryable: false,
+    };
+  }
+  const generic = emailHits.find((h) => h.role === "general" && h.nameMatch);
+  if (generic) {
+    return {
+      status: "incomplete",
+      email: generic.addr,
+      phone: null,
+      formUrl: null,
+      messagingUrl: null,
+      method: "email",
+      tier: null,
+      sourceUrl: page.finalUrl,
+      note: `Found ${generic.addr} but it is a general inbox, not confirmed for reservations.`,
+      retryable: false,
+    };
+  }
+  const unmatched = emailHits.find((h) => h.role === "reservations");
+  if (unmatched) {
+    return {
+      status: "incomplete",
+      email: unmatched.addr,
+      phone: null,
+      formUrl: null,
+      messagingUrl: null,
+      method: "email",
+      tier: null,
+      sourceUrl: page.finalUrl,
+      note: "Found an address but could not confirm it belongs to this hotel.",
+      retryable: false,
+    };
+  }
+  if (sawNonBookingOnly && emailHits.length === 0) {
+    return miss("Only support or privacy addresses are published; no reservations contact found.");
+  }
+  return miss("No public reservations contact found on the hotel page.");
+}
+
+export type HotelUrlCheck = { name: string; ok: boolean; code: string; latencyMs: number };
+
+export type HotelUrlDiagnosis = {
+  host: string;
+  verdict:
+    | "reachable"
+    | "dns_failed"
+    | "connection_failed"
+    | "tls_failed"
+    | "timeout"
+    | "blocked"
+    | "rate_limited"
+    | "provider_error"
+    | "not_html"
+    | "too_large"
+    | "aggregator"
+    | "bad_url";
+  checks: HotelUrlCheck[];
+  signals: { hasEmail: boolean; hasForm: boolean; hasPhone: boolean; hasMessaging: boolean };
+};
+
+/**
+ * Read-only diagnostic for one public hotel URL. Reports staged check
+ * outcomes and content signals only: no page text, addresses, or IPs.
+ * Same SSRF/TLS guardrails as discovery, capped at one small fetch.
+ */
+export async function diagnoseHotelUrl(
+  rawUrl: string,
+  opts: SafeFetchOpts & { maxBytes?: number } = {}
+): Promise<HotelUrlDiagnosis> {
+  const checks: HotelUrlCheck[] = [];
+  const fail = (
+    verdict: HotelUrlDiagnosis["verdict"],
+    host: string,
+    signals: HotelUrlDiagnosis["signals"]
+  ): HotelUrlDiagnosis => ({ host, verdict, checks, signals: { ...signals } });
+  const none = { hasEmail: false, hasForm: false, hasPhone: false, hasMessaging: false };
+  const started = Date.now();
+  let u: URL;
+  try {
+    u = new URL(rawUrl);
+  } catch {
+    checks.push({ name: "parse", ok: false, code: "bad_url", latencyMs: Date.now() - started });
+    return fail("bad_url", "", none);
+  }
+  if (u.protocol !== "https:" || isBlockedHostname(u.hostname)) {
+    checks.push({ name: "parse", ok: false, code: "blocked", latencyMs: Date.now() - started });
+    return fail("blocked", u.hostname, none);
+  }
+  checks.push({ name: "parse", ok: true, code: "ok", latencyMs: Date.now() - started });
+  const host = u.hostname.toLowerCase();
+  if (isBookingPlatformUrl(rawUrl)) {
+    checks.push({ name: "source", ok: true, code: "aggregator", latencyMs: 0 });
+    return fail("aggregator", host, none);
+  }
+  checks.push({ name: "source", ok: true, code: "direct", latencyMs: 0 });
+  const dnsStart = Date.now();
+  let addrs: string[];
+  try {
+    addrs = await (opts.lookupFn ?? defaultLookup)(host);
+  } catch {
+    checks.push({ name: "dns", ok: false, code: "dns_failed", latencyMs: Date.now() - dnsStart });
+    return fail("dns_failed", host, none);
+  }
+  const publicAddrs = addrs.filter(isPublicIp);
+  checks.push({
+    name: "dns",
+    ok: publicAddrs.length > 0,
+    code: publicAddrs.length > 0 ? "ok" : "private_ip",
+    latencyMs: Date.now() - dnsStart,
+  });
+  if (publicAddrs.length === 0) return fail("dns_failed", host, none);
+  const fetchStart = Date.now();
+  let page: { html: string; finalUrl: string };
+  try {
+    page = await fetchHtmlSafe(rawUrl, { ...opts, maxBytes: Math.min(opts.maxBytes ?? MAX_BYTES, 262144) });
+  } catch (e) {
+    const code = e instanceof SafeFetchError ? e.code : "fetch_failed";
+    const verdict =
+      code === "timeout"
+        ? ("timeout" as const)
+        : code === "connection_failed" || code === "fetch_failed" || code === "dns_failed"
+          ? ("connection_failed" as const)
+          : code === "tls_failed"
+            ? ("tls_failed" as const)
+            : code === "blocked_page"
+              ? ("blocked" as const)
+              : code === "rate_limited"
+                ? ("rate_limited" as const)
+                : code === "provider_error"
+                  ? ("provider_error" as const)
+                  : code === "not_html"
+                    ? ("not_html" as const)
+                    : code === "too_large"
+                      ? ("too_large" as const)
+                      : ("connection_failed" as const);
+    checks.push({ name: "fetch", ok: false, code, latencyMs: Date.now() - fetchStart });
+    return fail(verdict, host, none);
+  }
+  checks.push({ name: "fetch", ok: true, code: "ok", latencyMs: Date.now() - fetchStart });
+  const signals = {
+    hasEmail: extractEmails(page.html).length > 0,
+    hasForm: extractContactForms(page.html, page.finalUrl).length > 0,
+    hasPhone: extractPhones(page.html).length > 0,
+    hasMessaging: extractMessagingLinks(page.html).length > 0,
   };
+  checks.push({ name: "signals", ok: true, code: "ok", latencyMs: 0 });
+  return fail("reachable", host, signals);
 }

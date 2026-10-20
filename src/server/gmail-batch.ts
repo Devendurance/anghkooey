@@ -103,13 +103,16 @@ export async function prepareBatch(args: {
   }
 
   const picked = args.positions.map((n) => shortlist.items[n - 1]);
-  // LIVE mode keeps the strict verified-contact requirement. TEST mode
+  // LIVE mode keeps the strict verified-email requirement: a verified
+  // reservations email on record. Legacy rows predate contact methods;
+  // those verified emails came only from email discovery. TEST mode
   // allows missing contacts but labels them honestly and never sends to
   // any address except the configured controlled test inbox.
   if (mode === "live") {
     for (let i = 0; i < picked.length; i++) {
       const it = picked[i];
-      if (it.contactStatus !== "verified" || !it.contactEmail) {
+      const methodOk = it.contactMethod === "email" || (it.contactMethod == null && it.contactStatus === "verified");
+      if (it.contactStatus !== "verified" || !it.contactEmail || !methodOk) {
         return {
           status: "unverified_contact",
           position: it.position,

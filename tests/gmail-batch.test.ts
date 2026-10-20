@@ -318,7 +318,7 @@ dbSuite("approved multi-hotel batch (real Neon, throwaway identities, stubbed Go
         canonicalUserId: user,
         shortlistId: shortlist!.id,
         position: n,
-        result: { status: "verified", email: `stay@hotel${n}-stay.com`, sourceUrl: `https://hotel${n}-stay.com/contact`, note: "ok" },
+        result: { status: "verified", email: `stay@hotel${n}-stay.com`, sourceUrl: `https://hotel${n}-stay.com/contact`, note: "ok", phone: null, formUrl: null, messagingUrl: null, method: "email", tier: "property", retryable: false },
       });
     }
     return { user, conversationId, mod, sql, shortlist: shortlist! };
@@ -426,6 +426,66 @@ dbSuite("approved multi-hotel batch (real Neon, throwaway identities, stubbed Go
       expect(await mod.cancelBatch(stranger)).toMatchObject({ cancelled: false });
     } finally {
       await cleanup(sql, user, stranger);
+    }
+  }, 60000);
+
+  it("live gate accepts legacy email rows but rejects form-only contacts", async () => {
+    const { user, conversationId, mod, sql } = await setup([1, 2]);
+    const contacts = await import("../src/server/hotel-contacts");
+    try {
+      const view = await contacts.getActiveShortlist(user);
+      expect(view).not.toBeNull();
+      await sql`update hotel_shortlist_items set contact_method = null where shortlist_id = ${view!.id} and position = 1`;
+      await sql`update hotel_shortlist_items set contact_method = 'form', contact_email = null, contact_form_url = 'https://hotel2-stay.com/contact' where shortlist_id = ${view!.id} and position = 2`;
+      process.env.GMAIL_BATCH_LIVE = "1";
+      try {
+        const legacy = await mod.prepareBatch({ canonicalUserId: user, conversationId, positions: [1] });
+        expect(legacy.status).toBe("ready");
+        const formOnly = await mod.prepareBatch({ canonicalUserId: user, conversationId, positions: [2] });
+        expect(formOnly).toMatchObject({ status: "unverified_contact", position: 2 });
+      } finally {
+        delete process.env.GMAIL_BATCH_LIVE;
+      }
+    } finally {
+      await cleanup(sql, user);
+    }
+  }, 60000);
+
+  it("test batches keep the controlled recipient even if live is enabled at send time", async () => {
+    const { user, conversationId, mod, sql } = await setup([1]);
+    const bodies: string[] = [];
+    const capturing = (async (url: string, init?: RequestInit) => {
+      if (url.includes("oauth2.googleapis.com/token")) {
+        return { ok: true, status: 200, json: async () => ({ access_token: "ya29.fresh", expires_in: 3599 }) };
+      }
+      try {
+        const raw = JSON.parse(String(init?.body ?? "{}")).raw as string;
+        bodies.push(Buffer.from(raw.replace(/-/g, "+").replace(/_/g, "/"), "base64").toString("utf8"));
+      } catch {
+        bodies.push("");
+      }
+      return { ok: true, status: 200, json: async () => ({ id: "gmail-x", threadId: "t" }) };
+    }) as unknown as (url: string, init?: RequestInit) => Promise<Response>;
+    try {
+      const prepared = await mod.prepareBatch({ canonicalUserId: user, conversationId, positions: [1] });
+      expect(prepared.status).toBe("ready");
+      if (prepared.status !== "ready") return;
+      expect(prepared.mode).toBe("test");
+      const issued = await mod.issueBatchCode({ canonicalUserId: user, batchId: prepared.batchId });
+      process.env.GMAIL_BATCH_LIVE = "1";
+      try {
+        const out = await mod.approveBatch({ canonicalUserId: user, code: issued!.code, fetchFn: capturing });
+        expect(out.status).toBe("done");
+        if (out.status !== "done") return;
+        expect(out.items[0]).toMatchObject({ status: "sent" });
+      } finally {
+        delete process.env.GMAIL_BATCH_LIVE;
+      }
+      expect(bodies).toHaveLength(1);
+      expect(bodies[0]).toContain(`To: ${process.env.GMAIL_SEND_TEST_TO}`);
+      expect(bodies[0]).not.toContain("stay@hotel1-stay.com");
+    } finally {
+      await cleanup(sql, user);
     }
   }, 60000);
 
