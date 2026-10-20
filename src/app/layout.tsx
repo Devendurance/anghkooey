@@ -27,6 +27,9 @@ export const metadata: Metadata = {
   title: "Anghkooey | A personal AI concierge that remembers",
   description:
     "Anghkooey remembers the preferences and experiences that shape your choices, then brings the relevant context back when you need help again.",
+  verification: {
+    google: "0ZLZ1QgizKVH7SUdglS75HeIp0-z1BomhJbgcAerWHw",
+  },
 };
 
 export const viewport: Viewport = {
