@@ -13,6 +13,7 @@ import {
   formatApprovalPrompt,
   formatBatchResult,
   formatBatchStatusView,
+  getBatchMode,
   getBatchStatus,
   getPendingBatchPreviews,
   isCancelAllCommand,
@@ -56,12 +57,22 @@ const LINK_CODE_RE = /^[A-Za-z0-9_-]{32}$/;
 const CONSENT_YES_RE = /^(yes|yeah|yep|i agree|agree|enable memory|turn on memory|\/consent|consent yes)$/i;
 
 function helpText(channel: string): string {
+  const start = channel === "telegram" ? "/start /help /memory /connect" : "HELP, MEMORY, CONNECT";
+  // Same predicate as the batch sender: anything but an explicit live flag
+  // is test mode, so HELP never implies hotels get contacted while it is off.
+  const batchScope =
+    getBatchMode() === "live"
+      ? "Batch mail goes to the verified hotel contacts."
+      : "While live sending is off, batch mail goes only to the controlled test inbox. No hotel is contacted.";
   return [
     "Anghkooey here. I remember your hotel, travel and dining preferences.",
-    channel === "telegram" ? "Commands: /start /help /memory /connect" : "Commands: HELP, MEMORY, CONNECT work too.",
-    "Memory is off until you say YES. Say YES to enable it, or ask me anything and I will answer without saving.",
-    "Email: EMAIL prepares a hotel inquiry, PREVIEW shows the pending draft, SEND <code> approves it once, CANCEL stops it.",
-    "To link this chat to your web account: open your web session, create a link code, then send that code here.",
+    `Start here: ${start}. Memory stays off until you say YES.`,
+    "MEMORY: review saved preferences. YES: enable saving. CONNECT: link web and chat (send the code from your web session; codes expire in 10 min).",
+    "HOTELS: TRIP BRIEF with destination and dates plans a stay. HOTELS shows the shortlist. CONTACT 1,2 finds contact methods (forms are links only, never submitted).",
+    "GMAIL: EMAIL prepares one inquiry. PREVIEW inspects the draft. SEND <code> approves that exact email once. CANCEL stops the pending draft.",
+    "MULTI-HOTEL: INQUIRE 1,2 prepares a batch. PREVIEW ALL inspects it. SEND ALL <code> approves that exact batch. INQUIRIES checks status. CANCEL ALL stops the pending batch.",
+    batchScope,
+    "A Gmail receipt confirms Gmail accepted the email, not delivery to the inbox. Nothing sends until you approve it.",
   ].join("\n");
 }
 

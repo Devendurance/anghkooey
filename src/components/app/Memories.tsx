@@ -108,9 +108,15 @@ export function Memories() {
         </header>
 
         {phase === "loading" ? (
-          <p className="mem-status" role="status">
-            Opening your archive…
-          </p>
+          <div className="mem-status" role="status">
+            <span aria-hidden="true" className="chat-dots">
+              <i />
+              <i />
+              <i />
+            </span>
+            <p>Retrieving your memories…</p>
+            <p className="mem-note">Loading your saved memory records.</p>
+          </div>
         ) : phase === "failed" ? (
           <div className="mem-status" role="alert">
             <p>Your memories couldn&rsquo;t be loaded right now.</p>

@@ -140,9 +140,15 @@ export function Settings() {
         </header>
 
         {phase === "loading" ? (
-          <p className="mem-status" role="status">
-            Opening your settings…
-          </p>
+          <div className="mem-status" role="status">
+            <span aria-hidden="true" className="chat-dots">
+              <i />
+              <i />
+              <i />
+            </span>
+            <p>Getting your settings ready…</p>
+            <p className="mem-note">Checking your preferences and connected accounts.</p>
+          </div>
         ) : phase === "failed" ? (
           <div className="mem-status" role="alert">
             <p>Your settings couldn&rsquo;t be loaded right now.</p>
