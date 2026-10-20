@@ -12,6 +12,23 @@ describe("public legal pages", () => {
     }
   });
 
+  it("legal pages own their styles instead of depending on the app shell", () => {
+    for (const p of ["src/app/privacy/page.tsx", "src/app/terms/page.tsx"]) {
+      const src = read(p);
+      expect(src).toContain("LegalPage");
+      expect(src).not.toMatch(/className="(mem|acct|chat)-/);
+    }
+    expect(read("src/components/legal/LegalPage.tsx")).toContain('import "./legal.css"');
+  });
+
+  it("privacy discloses that Gmail drafts, batches and receipts have no automatic deletion", () => {
+    const privacy = read("src/app/privacy/page.tsx").replace(/\s+/g, " ");
+    expect(privacy).toContain("expire 30 minutes");
+    expect(privacy).toContain("do not delete anything");
+    expect(privacy).toContain("does not currently delete these records automatically");
+    expect(privacy).not.toContain("kept until you cancel them or they expire");
+  });
+
   it("links Terms next to Privacy in the footer", () => {
     const footer = read("src/components/brand/SiteFooter.tsx");
     expect(footer).toContain('href="/privacy"');

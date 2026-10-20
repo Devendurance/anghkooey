@@ -50,5 +50,5 @@ The Terms intentionally omit these. Add them if the owner wants them in the Term
 - Governing law and jurisdiction, and dispute process.
 - Support or legal contact email (Google also requires a developer contact email in the consent screen).
 - Confirm the Limited Use commitments in the Privacy Policy: no advertising use, no sale of Google data. They match the current code, which has no ads or data sale. Add a human-access statement if the owner wants one.
-- Retention period for Gmail draft and batch records, beyond "until cancelled or expired".
+- Retention policy for Gmail draft, batch and receipt records. The code has no automatic deletion and Disconnect does not remove them (30-minute approval expiry only blocks sending). The Privacy Policy discloses this. Decide a retention period and a deletion path as future engineering work.
 - Whether the Terms effective date (October 20, 2026) should differ.

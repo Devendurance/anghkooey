@@ -1,0 +1,202 @@
+/* Public legal pages (/privacy, /terms). Self-contained, lg-* prefixed so it never collides with app or landing CSS. */
+
+.lg-page {
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  background:
+    radial-gradient(60rem 28rem at 50% -8rem, rgb(79 92 255 / 0.1), transparent 70%),
+    var(--color-night);
+  color: var(--color-cream);
+  font-family: var(--font-ui);
+}
+
+.lg-top {
+  border-bottom: 1px solid var(--color-hairline);
+}
+
+.lg-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  max-width: 72rem;
+  margin: 0 auto;
+  padding: 12px clamp(20px, 5vw, 40px);
+}
+
+.lg-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  border-radius: 8px;
+}
+
+.lg-mark {
+  display: block;
+  width: 24px;
+}
+
+.lg-word {
+  display: block;
+  width: 140px;
+  height: 18px;
+}
+
+.lg-nav,
+.lg-foot-in {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 20px;
+}
+
+.lg-nav a,
+.lg-foot-in a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  font: 500 15px/1 var(--font-ui);
+  color: var(--color-cream-70);
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+  transition: color 0.2s ease, border-color 0.2s ease;
+}
+
+.lg-nav a:hover,
+.lg-foot-in a:hover {
+  color: var(--color-cream);
+  border-bottom-color: var(--color-hairline-strong);
+}
+
+.lg-nav a[aria-current="page"],
+.lg-foot-in a[aria-current="page"] {
+  color: var(--color-cream);
+  border-bottom-color: var(--color-brand);
+}
+
+.lg-page a:focus-visible {
+  outline: 2px solid var(--color-brand);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+
+.lg-main {
+  flex: 1;
+  padding: clamp(40px, 8vw, 96px) clamp(20px, 5vw, 40px) clamp(56px, 9vw, 112px);
+}
+
+.lg-article {
+  max-width: 44rem;
+  margin: 0 auto;
+}
+
+.lg-intro {
+  display: grid;
+  gap: 18px;
+  padding-bottom: clamp(32px, 5vw, 48px);
+  border-bottom: 1px solid var(--color-hairline);
+}
+
+.lg-eyebrow {
+  font: 600 12px/1 var(--font-label);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--color-brand);
+}
+
+.lg-title {
+  font: 500 clamp(38px, 7vw, 60px)/1.04 var(--font-display);
+  letter-spacing: -0.01em;
+  color: var(--color-cream);
+  text-wrap: balance;
+}
+
+.lg-lead {
+  font: 400 18px/1.6 var(--font-ui);
+  color: var(--color-cream-70);
+}
+
+.lg-updated {
+  font: 500 13px/1.4 var(--font-label);
+  letter-spacing: 0.04em;
+  color: var(--color-cream-55);
+}
+
+.lg-section {
+  display: grid;
+  gap: 14px;
+  padding-block: clamp(28px, 4vw, 40px);
+  border-bottom: 1px solid var(--color-hairline);
+}
+
+.lg-section:last-child {
+  border-bottom: 0;
+}
+
+.lg-h2 {
+  font: 500 clamp(26px, 4vw, 32px)/1.15 var(--font-display);
+  color: var(--color-cream);
+  text-wrap: balance;
+}
+
+.lg-p,
+.lg-list {
+  font: 400 17px/1.7 var(--font-ui);
+  color: rgb(244 238 223 / 0.82);
+}
+
+.lg-list {
+  display: grid;
+  gap: 10px;
+  padding-left: 22px;
+  list-style: disc;
+}
+
+.lg-list li::marker {
+  color: var(--color-cream-35);
+}
+
+.lg-body a {
+  color: var(--color-cream);
+  text-decoration: underline;
+  text-underline-offset: 4px;
+  text-decoration-color: var(--color-hairline-strong);
+  transition: text-decoration-color 0.2s ease;
+}
+
+.lg-body a:hover {
+  text-decoration-color: var(--color-brand);
+}
+
+.lg-body {
+  overflow-wrap: anywhere;
+}
+
+.lg-foot {
+  border-top: 1px solid var(--color-hairline);
+}
+
+.lg-foot-in {
+  max-width: 72rem;
+  margin: 0 auto;
+  padding: 16px clamp(20px, 5vw, 40px);
+  gap: 0 24px;
+}
+
+@media (max-width: 380px) {
+  .lg-word {
+    width: 116px;
+  }
+  .lg-nav {
+    gap: 0 14px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lg-page * {
+    transition: none !important;
+  }
+}
