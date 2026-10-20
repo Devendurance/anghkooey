@@ -4,8 +4,9 @@ import { Spectrum } from "spectrum-ts";
 import { telegram } from "spectrum-ts/providers/telegram";
 import { imessage } from "spectrum-ts/providers/imessage";
 import { getOrCreateChannelConversation, resolveChannelUser } from "../src/server/channel-identity";
-import { cancelMerge, confirmLink, confirmMerge, requestMerge } from "../src/server/linking";
+import { cancelMerge, confirmLink, confirmMerge, getCanonicalUserId, requestMerge } from "../src/server/linking";
 import { handleMessage } from "../src/server/orchestrator";
+import { isHotelsCommand, parseContactCommand, type DiscoveryResult } from "../src/server/hotel-contacts";
 import {
   approveAndSend,
   cancelPending,
@@ -314,6 +315,73 @@ async function main() {
           // nothing was sent.
           await message.reply("Could not confirm the send outcome. Check Gmail Sent before attempting another send.");
           gmailLog("gmail_error", "uncertain");
+          continue;
+        }
+      }
+
+      // Hotel shortlist and contact verification. Read-only until a future
+      // batch milestone: never sends email, never touches Gmail credentials.
+      // Runs before the generic orchestrator so selections stay exact.
+      const contactSel = parseContactCommand(text);
+      if (isHotelsCommand(text) || contactSel) {
+        const canonical = await getCanonicalUserId(userId).catch(() => userId);
+        const hotelLog = (event: string, status: string) =>
+          console.log(
+            JSON.stringify({
+              worker: "photon",
+              event,
+              platform,
+              sender_hash: hash12(senderId),
+              status,
+              latency_ms: Date.now() - started,
+            })
+          );
+        try {
+          const rl = await checkRateLimit(`hotels:${hash12(senderId)}`, 10, 60_000);
+          if (!rl.allowed) {
+            await message.reply("You are checking hotels too quickly. Wait a moment and try again.");
+            continue;
+          }
+          const { getActiveShortlist, isShortlistUsable } = await import("../src/server/hotel-contacts");
+          const shortlist = await getActiveShortlist(canonical);
+          const today = new Date().toISOString().slice(0, 10);
+          if (!shortlist || shortlist.items.length === 0) {
+            await message.reply("No hotel shortlist yet. Ask for a TRIP BRIEF with destination and dates first.");
+            hotelLog(contactSel ? "hotel_contact" : "hotel_list", "none");
+            continue;
+          }
+          if (!isShortlistUsable(shortlist, today)) {
+            await message.reply("That shortlist is no longer current. Ask for a fresh TRIP BRIEF to refresh candidates.");
+            hotelLog(contactSel ? "hotel_contact" : "hotel_list", "stale");
+            continue;
+          }
+          if (!contactSel) {
+            const { formatShortlistMessage } = await import("../src/server/hotel-contacts");
+            await message.reply(formatShortlistMessage(shortlist).slice(0, 3500));
+            hotelLog("hotel_list", "shown");
+            continue;
+          }
+          if (contactSel.some((n) => n < 1 || n > shortlist.items.length)) {
+            await message.reply(`Pick numbers 1 to ${shortlist.items.length} from your current shortlist. Reply HOTELS to see it.`);
+            hotelLog("hotel_contact", "invalid");
+            continue;
+          }
+          const { discoverHotelContact, formatContactResults, saveContactResult } = await import("../src/server/hotel-contacts");
+          const results: { position: number; name: string; result: DiscoveryResult }[] = [];
+          await space.responding(async () => {
+            for (const n of contactSel) {
+              const item = shortlist.items[n - 1];
+              const result = await discoverHotelContact({ name: item.name, sourceUrl: item.sourceUrl });
+              await saveContactResult({ canonicalUserId: canonical, shortlistId: shortlist.id, position: n, result }).catch(() => false);
+              results.push({ position: n, name: item.name, result });
+            }
+            await message.reply(formatContactResults(shortlist, results).slice(0, 3500));
+          });
+          hotelLog("hotel_contact", "done");
+          continue;
+        } catch {
+          await message.reply("Something went wrong looking up hotels. No email was sent. Try again in a moment.");
+          hotelLog(contactSel ? "hotel_contact" : "hotel_list", "failed");
           continue;
         }
       }

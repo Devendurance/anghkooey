@@ -278,6 +278,22 @@ export async function handleMessage(input: HandleMessageInput): Promise<ChatResu
     } catch {
       hotels = { status: "provider_unavailable", candidates: [], observedAt: new Date().toISOString() };
     }
+    // Durable shortlist for hotel selection. Auxiliary only: failures here
+    // never affect the brief. A fresh search supersedes the previous list.
+    if (hotels.status === "ok" && hotels.candidates.length > 0 && stay && tripParams?.destination) {
+      try {
+        const { saveShortlist } = await import("./hotel-contacts");
+        await saveShortlist({
+          canonicalUserId,
+          destination: tripParams.destination,
+          checkIn: stay.checkIn,
+          checkOut: stay.checkOut,
+          candidates: hotels.candidates,
+        });
+      } catch {
+        // Shortlist is auxiliary; the brief already carries the candidates.
+      }
+    }
   }
   const effectiveParams =
     tripMode && tripParams && stay

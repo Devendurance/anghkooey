@@ -13,7 +13,7 @@ async function main() {
   const sql = postgres(url, { ssl: "require", max: 1, prepare: false });
   try {
     const scriptDir = path.dirname(fileURLToPath(import.meta.url));
-    const files = ["001_init.sql", "002_slice2.sql", "003_merge.sql", "004_gmail.sql", "005_gmail_send.sql"];
+    const files = ["001_init.sql", "002_slice2.sql", "003_merge.sql", "004_gmail.sql", "005_gmail_send.sql", "006_hotel_shortlist.sql"];
     const applied: string[] = [];
     for (const f of files) {
       const p = path.resolve(scriptDir, "..", "db", "migrations", f);
