@@ -13,6 +13,8 @@
 **A personal AI concierge that remembers how you like things.**  
 Anghkooey brings relevant preferences, constraints, and past experiences back into your next conversation — starting with hotels, travel, and dining.
 
+It can also turn those preferences into practical steps: research hotel options, discover published contact channels, draft personalized inquiries, and send explicitly approved emails through a connected Gmail account.
+
 <p>
   <a href="https://anghkooey.vercel.app"><img alt="Visit website" src="https://img.shields.io/badge/Visit%20Website-05080F?style=for-the-badge&logo=vercel&logoColor=D8DCFF" /></a>
   <a href="https://anghkooey.vercel.app/chat"><img alt="Start web chat" src="https://img.shields.io/badge/Start%20Talking-4F5CFF?style=for-the-badge&logo=wechat&logoColor=white" /></a>
@@ -26,7 +28,7 @@ Anghkooey brings relevant preferences, constraints, and past experiences back in
   <a href="https://github.com/Devendurance/anghkooey"><img alt="Open source on GitHub" src="https://img.shields.io/badge/Source-GitHub-171719?style=flat-square&logo=github" /></a>
 </p>
 
-[**Explore the experience**](#the-experience) · [**How memory works**](#how-memory-works) · [**Run locally**](#run-it-locally) · [**Architecture**](#architecture) · [**Documentation**](#project-documentation)
+[**Explore the experience**](#the-experience) · [**How memory works**](#how-memory-works) · [**From memory to action**](#from-memory-to-action) · [**Run locally**](#run-it-locally) · [**Architecture**](#architecture) · [**Documentation**](#project-documentation)
 
 </div>
 
@@ -51,8 +53,13 @@ A quiet hotel room matters differently when you've said road noise kept you awak
 | **Corrections** | Replace an outdated preference with a new confirmed Walrus memory; the old record is retired from recall, not deleted from Mainnet. |
 | **Linked conversations** | Connect a browser identity with Telegram or an iMessage chat using a single-use code and verified in-channel approval when accounts need consolidating. |
 | **Privacy controls** | Change memory consent and end a browser session, with clear information about what each action does *not* erase. |
+| **Trip Brief and real hotel search** | Describe a destination, dates, party size, and budget in natural language. Anghkooey looks up real hotel candidates through SerpApi's Google Hotels results, with source links and indicative observed rates. |
+| **Saved hotel shortlist** | Reopen the latest relevant shortlist using `HOTELS`; dates, candidate sources, and rate limitations stay visible. |
+| **Hotel contact discovery** | Use `CONTACT 1,2` to check published email, contact form, phone, or messaging options. Results include direct validated links when available and honest timeout/no-contact outcomes. |
+| **Optional Gmail connection** | Connect your own Gmail account in web Settings with Google OAuth (`openid`, `email`, and `gmail.send`); Anghkooey does not request Gmail inbox-reading access. |
+| **Approval-first inquiries** | Prepare a single hotel inquiry or up to three distinct hotel inquiries, inspect full drafts, and approve an exact email or batch with a short-lived, single-use code. Every accepted send has its own Gmail receipt. |
 
-**Channel availability:** web chat and the [Telegram bot](https://t.me/useanghkooey_bot) are the public entry points. iMessage is integrated through Photon but remains **in testing**; no public contact is advertised here.
+**Channel availability:** web chat and the [Telegram bot](https://t.me/useanghkooey_bot) are the public entry points. iMessage is working through Photon Spectrum in **limited, invitation-based testing**; an authorized tester must be added before they can message the agent. There is no public iMessage number advertised here.
 
 ### Product gallery
 
@@ -104,13 +111,40 @@ Web, Telegram, and iMessage use the same conversation engine. Linking is **not a
 
 **Important:** an anonymous browser session is not a recoverable email login. Clearing cookies, ending the session, or switching devices can prevent access to that specific web identity. Wallet connection is not required and does not confer individual custody over memories in the current architecture.
 
+
+## From memory to action
+
+Anghkooey's hotel workflow is designed around the work that typically follows a travel question. The assistant does not book rooms or impersonate a hotel: it helps the person **research, review, approve, and verify** each step.
+
+1. **Ask for a Trip Brief.** State the destination, stay dates, number of travelers, and budget. DeepSeek uses relevant, consented Walrus memories as context; the hotel-search adapter requests candidates from **SerpApi / Google Hotels**.
+2. **Inspect the shortlist.** Anghkooey saves up to three candidates for the trip in Neon. `HOTELS` returns the current shortlist with sources, stay dates, and observed rates when supplied. Rates are indicative, **not confirmed inventory or bookings**.
+3. **Check contact methods.** `CONTACT 1,2` attempts to find source-backed property or group contact channels. A verified official form is returned as a clickable HTTPS URL, **not misrepresented as an email address**. Unverifiable sites and timeouts are reported honestly.
+4. **Prepare inquiries.** After connecting Gmail in web Settings and linking the correct chat identity, `EMAIL` prepares one inquiry; `INQUIRE 1,2` prepares a property-specific batch. `PREVIEW` and `PREVIEW ALL` show the recipients, subjects, and **complete message bodies before approval**.
+5. **Approve and inspect receipts.** `SEND <code>` or `SEND ALL <code>` authorizes the exact previewed send once. Anghkooey stores a distinct Gmail message receipt for each accepted email. Gmail acceptance **does not mean delivery, a hotel reply, or a booking**; uncertain send outcomes are not blindly retried.
+
+### Photon messaging commands
+
+These commands are handled by the Photon worker in the relevant iMessage/Telegram conversation; web Settings handles Gmail connection. Send `HELP` in chat for the live command list.
+
+| Intent | Command |
+| :--- | :--- |
+| Memory consent and status | `YES` to enable future saves; `MEMORY` for memory status |
+| Link web and messaging identities | `CONNECT` (web-issued code; `MERGE YES` / `MERGE NO` if consolidation is needed) |
+| Create a hotel plan | A natural-language travel request / `TRIP BRIEF` with destination and dates |
+| View candidates and find contact methods | `HOTELS` · `CONTACT 1,2` |
+| Prepare, review, approve, or cancel one inquiry | `EMAIL` · `PREVIEW` · `SEND <code>` · `CANCEL` |
+| Prepare, review, approve, or cancel a batch | `INQUIRE 1,2` · `PREVIEW ALL` · `SEND ALL <code>` · `CANCEL ALL` |
+| Check batch outcomes | `INQUIRIES` |
+
+**Current outgoing-email safety mode:** the default batch mode is **test-only** (`GMAIL_BATCH_LIVE=0`). Approved batch messages go to a configured controlled test inbox with `[TEST]` subjects, **not to the hotels**. Live batches require a separately enabled server-side flag and verified reservations-suitable email contacts; do not enable this casually. The single-inquiry send path is also restricted to the configured test inbox. The Google OAuth consent app's wider public verification is still pending, so Gmail connection may be limited to authorized testers.
+
 ## Architecture
 
 ```mermaid
 flowchart TB
     U[User] --> W[Web app / Next.js]
     U --> TG[Telegram]
-    U --> IM[iMessage - in testing]
+    U --> IM[iMessage - limited testing]
     TG --> P[Photon Spectrum Cloud]
     IM --> P
     P --> WK[Persistent Photon worker / AWS EC2]
@@ -118,18 +152,25 @@ flowchart TB
     API --> CORE[Shared conversation orchestrator]
     WK --> CORE
     CORE <--> DS[DeepSeek Flash]
-    CORE <--> DB[(Neon PostgreSQL / sessions, links, metadata)]
+    CORE <--> DB[(Neon PostgreSQL / identities, memory metadata, hotel shortlists, encrypted drafts, receipts)]
+    CORE --> HOTELS[SerpApi / Google Hotels]
+    WK --> ACTIONS[Hotel contacts and approval-first email workflows]
+    ACTIONS <--> DB
+    ACTIONS --> CONTACTS[Public hotel contact pages]
+    ACTIONS --> GMAIL[Google OAuth / Gmail send API]
     CORE <--> MW[MemWal SDK]
     MW <--> WAL[(Walrus Memory Mainnet)]
 ```
 
 **Where things live:**
 
-- **Vercel:** Next.js app, chat UI, memory/profile/settings pages, and server-side API routes.
-- **AWS EC2:** exactly one supervised, continuously running Photon worker for messaging.
-- **Neon PostgreSQL:** user/session identities, consent, channel links, idempotency, temporary conversation history, and Walrus blob metadata.
+- **Vercel:** Next.js app, chat UI, memory/profile/settings pages, public privacy/terms pages, Gmail connection settings and OAuth callback, and server-side API routes.
+- **AWS EC2:** exactly one supervised, continuously running Photon worker for messaging, hotel contact discovery, and approval commands.
+- **Neon PostgreSQL:** user/session identities, consent, channel links, idempotency, temporary conversation history, Walrus blob metadata, hotel shortlists/contact evidence, encrypted email drafts, approval state, and Gmail receipts.
 - **Walrus Mainnet:** durable memory facts stored through `@mysten-incubation/memwal`. Neon is **not** a replacement long-term preference store.
 - **DeepSeek Flash:** the deployed conversation model, independent of any coding assistant used to build the project.
+- **SerpApi / Google Hotels:** real hotel-search candidates, source links, and observed indicative rates; not a booking engine.
+- **Google OAuth / Gmail API:** optional user-owned, send-only authorization. Server-side AES-256-GCM encryption protects OAuth tokens and pending email content. Email sending requires exact user approval.
 
 ### Technology
 
@@ -142,6 +183,8 @@ flowchart TB
 | Database | Neon PostgreSQL |
 | Messaging | Photon Spectrum (`spectrum-ts`) for Telegram and iMessage |
 | Hosting | Vercel (web) and AWS EC2 + systemd (worker) |
+| Hotel discovery | SerpApi / Google Hotels; source-validated hotel contact discovery |
+| Email | Google OAuth (`openid`, `email`, `gmail.send`); Gmail API with preview-and-approve single and batch inquiries |
 
 ## Run it locally
 
@@ -150,6 +193,8 @@ flowchart TB
 - **Node.js 24.x** recommended (the production web deployment uses Node 24).
 - npm, Git, a Neon Postgres database, DeepSeek API access, and Walrus Memory Mainnet credentials.
 - Photon project credentials and a Telegram bot token **only if running the messaging worker**.
+- **Optional hotel discovery:** a SerpApi key for real Google Hotels candidate searches.
+- **Optional Gmail workflows:** a Google OAuth web client, a consistent server-side Gmail token encryption key, and a controlled test recipient. Google OAuth verification may limit which Google accounts can connect.
 
 ### 1. Clone and install
 
@@ -185,8 +230,14 @@ Edit `.env` locally. Never commit it, paste credentials into issues, or expose k
 | `PHOTON_PROJECT_ID` | Photon project identifier, for the worker |
 | `PHOTON_PROJECT_SECRET` | Photon server credential, for the worker |
 | `TELEGRAM_BOT_TOKEN` | Telegram bot credential, for the worker |
+| `SERPAPI_API_KEY` | SerpApi key for Google Hotels results; server-side only |
+| `GOOGLE_CLIENT_ID` | Google OAuth client ID (web application) |
+| `GOOGLE_CLIENT_SECRET` | Google OAuth client secret; server-side only |
+| `GMAIL_TOKEN_KEY` | 64-character hex (32-byte) AES-256-GCM key for encrypting Gmail tokens and email drafts; keep the same existing value wherever the Gmail workflow runs |
+| `GMAIL_SEND_TEST_TO` | Controlled email address used for approved test sends; required for the safe sending flow |
+| `GMAIL_BATCH_LIVE` | Defaults to test mode unless explicitly set to `1`; keep `0` for controlled demos and testing |
 
-The repository's [`.env.example`](./.env.example) is the canonical variable-name reference.
+The repository's [`.env.example`](./.env.example) is the baseline for core and OAuth credentials; the table above also documents optional hotel search and controlled sending settings. Keep production-only credentials out of client bundles. The public OAuth callback is `/api/gmail/callback` on the configured `WEB_BASE_URL` origin.
 
 ### 3. Prepare the database and run the web app
 
@@ -220,20 +271,20 @@ npm run build
 npm run check:integrations
 ```
 
-Some integration tests require database access. `photon:readiness` is the dedicated Photon check; the generic integration checker may contain legacy Photon status wording. Scripts such as `smoke:memory` and `test-channel-flow` can perform **real, chargeable Mainnet writes** — run them deliberately, not as routine build checks.
+Some integration tests require database access; the full database-backed Gate 1 run passed **255 tests** on an isolated Neon QA branch (see the release QA matrix below). `photon:readiness` is the dedicated Photon check; the generic integration checker may contain legacy Photon status wording. Scripts such as `smoke:memory` and `test-channel-flow` can perform **real, chargeable Mainnet writes** — run them deliberately, not as routine build checks.
 
 ## Project structure
 
 ```text
 src/app/                  Next.js pages and HTTP routes
 src/components/           Landing, brand, and app experiences
-src/server/               Sessions, identity, DeepSeek, Walrus, orchestration
+src/server/               Sessions, identity, DeepSeek, Walrus, orchestration, hotel search, contacts, Gmail
 src/lib/                  Shared site configuration and client helpers
 workers/photon-worker.ts  Long-running Telegram/iMessage consumer
 db/migrations/            PostgreSQL schema and migration history
 scripts/                  Readiness, verification, and migration utilities
 tests/                    Automated regression and integration tests
-docs/                     PRD, TRD, architecture, deployment guides
+docs/                     PRD, TRD, architecture, deployment guides, release QA and OAuth compliance
 public/brand/anghkooey/   Branding and production artwork
 ```
 
@@ -246,6 +297,11 @@ public/brand/anghkooey/   Branding and production artwork
 - **Corrections, not erasure.** Replacing a memory retires its old metadata from recall; it does not promise immediate destruction of an already published Walrus blob.
 - **Managed custody.** The current MemWal account and relayer-managed encryption are application-side infrastructure, **not individual wallet custody** or user-held encryption keys.
 - **No verified live bookings.** Anghkooey does not claim hotel inventory, current prices, reservations, or integrations it cannot verify.
+- **Hotel-contact verification.** Contact methods are sourced from public pages with HTTPS, redirect, DNS/IP and response-size safeguards. A hotel contact form is a link, not an automatically submitted request or verified reservation email.
+- **Approval-controlled Gmail.** Gmail uses `gmail.send` without inbox-reading permissions. The exact recipient and draft are shown before any single-use approval; parallel/repeated approvals are guarded against duplicate sends.
+- **Test mode and honest receipts.** The current controlled demonstration sends to a test inbox only, not to actual hotels. Gmail receipts confirm API acceptance, not delivery. Partial/uncertain outcomes remain explicit and are not automatically resent.
+- **Email record retention.** Gmail draft, batch, and receipt records are encrypted where applicable but are **not automatically deleted** on approval-code expiry, cancellation, or Gmail disconnection. See the [Privacy Policy](https://anghkooey.vercel.app/privacy) for current retention limitations.
+- **Google OAuth verification.** The OAuth flow is implemented, but public Google verification remains pending; connected Gmail access may be restricted to authorized testers.
 - **No cross-device web recovery yet.** Guest browser sessions are convenient but should not be mistaken for a full account-recovery system.
 - **iMessage is in testing.** Public contact details will appear only when a supported public channel is available.
 
@@ -256,7 +312,8 @@ Do not publish other users' memory contents, private IDs, or unredacted receipts
 The production architecture uses separate hosts for web and messaging:
 
 - **Web:** [Vercel deployment guide](./docs/DEPLOY-WEB.md). Set server-only environment variables, use `WEB_BASE_URL` with your public HTTPS domain, and verify `/api/health` plus actual chat behavior. Disable deployment protection for the public production domain before inviting users or judges.
-- **Worker:** [Photon deployment guide](./docs/DEPLOY-PHOTON.md). Use a persistent systemd or container process; verify readiness and real message replies. Keep exactly one active consumer.
+- **Worker:** [Photon deployment guide](./docs/DEPLOY-PHOTON.md). Use a persistent systemd or container process; verify readiness and real message replies. Keep exactly one active consumer. Web and worker environments must use the same existing Gmail encryption key if both access the same encrypted Gmail records.
+- **Gmail OAuth:** Configure the Google web client to permit the callback at `<WEB_BASE_URL>/api/gmail/callback`. Do not confuse working OAuth for test users with Google's approval for unrestricted public access.
 
 The web app being *built successfully* does not by itself prove the messaging worker is running. Conversely, worker readiness is not a substitute for a live Telegram/iMessage test.
 
@@ -272,6 +329,11 @@ The web app being *built successfully* does not by itself prove the messaging wo
 | [Web deployment](./docs/DEPLOY-WEB.md) | Vercel and API configuration |
 | [Photon deployment](./docs/DEPLOY-PHOTON.md) | Worker hosting and secure channel linking |
 | [Backend status](./BACKEND-STATUS.md) | Implementation notes and verified backend milestones |
+| [Photon Gate 1 QA matrix](./docs/release/PHOTON-QA-MATRIX.md) | Database-backed integration testing, security verification, and remaining limits |
+| [Photon Gate 2 QA report](./docs/release/PHOTON-GATE2-QA.md) | Web/mobile UX checks and Photon command review |
+| [Google OAuth compliance notes](./docs/release/GOOGLE-OAUTH-COMPLIANCE.md) | Public site disclosures and outstanding external verification steps |
+| [Privacy Policy](https://anghkooey.vercel.app/privacy) | Data use, consent, Gmail scope, retention, third parties |
+| [Terms of Service](https://anghkooey.vercel.app/terms) | Terms and acceptable-use policies |
 
 ## License and assets
 
