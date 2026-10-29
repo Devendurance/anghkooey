@@ -23,7 +23,7 @@ Anghkooey is a personal AI concierge (web chat, Telegram, iMessage) with opt-in 
 1. **Agentic chat lookup** (`/chat`): say *“Find dining like Nobu in Lagos.”* The concierge proposes the exact Qloo lookup — anchor plus city — and waits for your yes. On approval it runs live Qloo Search + Insights and DeepSeek answers grounded ONLY in the returned venues, with Qloo signal, remembered context, and unverified claims kept visibly separate.
 2. **TasteProof visual discovery** (`/taste`): the same live evidence as photographic venue cards — real Qloo photos, descriptions, cultural tags, Qloo affinity (labeled as a ranking signal, never a match percentage), plus anchor correction with a real before/after comparison and one-click Undo.
 
-Missing details are asked, never invented. Denials and unrelated questions never trigger a lookup. Dining turns are session-only: nothing is written to durable memory, and raw Walrus memory content is never transmitted to Qloo — only approved anchor/city strings and Qloo-returned entity IDs cross that boundary. (Relevant recalled memories may separately be included in DeepSeek prompts; that stays between our server and the chat model.)
+Missing details are asked, never invented. Denials and unrelated questions never trigger a lookup. Dining turns are session-only: nothing is written to durable memory. Qloo receives the approved anchor/city inputs, resolves the anchor to a Qloo entity, and that Qloo-returned entity ID drives the Insights lookup — raw Walrus memory content is never transmitted to Qloo. (Relevant recalled memories may separately be included in DeepSeek prompts; that stays between our server and the chat model.)
 
 ## How we built it
 
@@ -47,7 +47,7 @@ Without Qloo, the concierge can recall that you liked Nobu — but it cannot *di
 
 ## Potential impact and future direction
 
-A concierge that remembers taste *and* proves cultural fit generalizes beyond dining: hotels with verified-quiet evidence, events matching your scene, neighborhood discovery. Next: recorded owner chat pass, judge feedback incorporation, and surfacing Qloo tags as memory-search facets.
+A concierge that remembers taste *and* proves cultural fit generalizes beyond dining: hotels with verified-quiet evidence, events matching your scene, neighborhood discovery. Next: recorded demo video (the live chat interaction is already owner-verified in-browser), judge feedback incorporation, and surfacing Qloo tags as memory-search facets.
 
 ## Exact demo testing instructions (no credentials needed)
 

@@ -13,7 +13,7 @@ confidence. What if your concierge remembered your taste *and proved it*?”
 
 ## Beat 2 — Consent-based agentic Qloo lookup (0:25–1:00)
 
-**Say:** “I’ll ask for dining like Nobu in Lagos — typed by hand with memory saving OFF, so nothing is recalled here. Watch: it doesn’t fire
+**Say:** “I’ll ask for dining like Nobu in Lagos — typed by hand with memory saving OFF, so this demo creates no new durable memories, and it makes no claim about any existing saved memories. Watch: it doesn’t fire
 immediately. It proposes the exact lookup — anchor plus city — and waits for
 my yes. Only those two strings are ever sent to the external Qloo lookup." (The chat model separately receives conversation context to compose its answer.)
 
@@ -47,7 +47,7 @@ Nobu results restored (screenshot: `docs/media/qloo-tasteproof-comparison.png`).
 
 ## Beat 6 — What makes Qloo indispensable (2:40–3:00)
 
-**Say:** “Memory recalls that I liked Nobu. Qloo turns that into discovery —
+**Say:** “With optional user-consented memory, Anghkooey can recall that you liked Nobu — but this demo types the anchor by hand and proves nothing about saved-memory recall. Qloo turns an approved anchor into discovery —
 ranked, photographed venues in a city I don’t know, with the cultural fit
 explained. Your tastes, remembered. Cultural fit, backed by Qloo.”
 

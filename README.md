@@ -54,34 +54,6 @@ A quiet hotel room matters differently when you've said road noise kept you awak
 
 **Channel availability:** web chat and the [Telegram bot](https://t.me/useanghkooey_bot) are the public entry points. iMessage is integrated through Photon but remains **in testing**; no public contact is advertised here.
 
-### Product gallery
-
-> **Visual placeholders:** Add your actual screenshots to `docs/media/` before publishing a demo-focused README. These slots are deliberately labelled rather than displaying invented product screenshots or broken image links.
-
-<p align="center"><strong>01 — The cinematic opening</strong></p>
-<p align="center"><em>📷 Add <code>docs/media/landing-hero.png</code> — folded-A reveal / orbital hero</em></p>
-
-<!-- Replace the placeholder above after adding your real screenshot:
-<p align="center"><img src="./docs/media/landing-hero.png" alt="Anghkooey's dark cinematic landing page" width="900" /></p>
--->
-
-<p align="center"><strong>02 — A conversation that remembers</strong></p>
-<p align="center"><em>📷 Add <code>docs/media/web-chat.png</code> — web chat with a real memory-recall receipt</em></p>
-
-<!-- Replace the placeholder above after adding your real screenshot:
-<p align="center"><img src="./docs/media/web-chat.png" alt="Anghkooey web chat showing a recalled Walrus memory" width="900" /></p>
--->
-
-<p align="center"><strong>03 — Memories, corrections, and connections</strong></p>
-<p align="center"><em>📷 Add <code>docs/media/memories-and-profile.png</code> — memory archive and channel linking</em></p>
-
-<!-- Replace the placeholder above after adding your real screenshot:
-<p align="center"><img src="./docs/media/memories-and-profile.png" alt="Anghkooey memory archive and connected-channel profile" width="900" /></p>
--->
-
-**Demo video:** _[Add your public demo link here after publication]._  
-**Mainnet evidence:** _[Add a sanitized proof/evidence link here when available; do not expose user content]._ 
-
 ## TasteProof × Qloo: culturally grounded dining
 
 > **Hackathon addition (October 2026):** TasteProof connects Anghkooey's memory-aware concierge to [Qloo's](https://www.qloo.com/) cultural-intelligence API. The rest of Anghkooey — DeepSeek chat, Walrus memories, Neon identity, Photon messaging — is the pre-existing product; Qloo is the new taste layer.
@@ -118,7 +90,7 @@ The layout is responsive — the same discovery on a phone:
 
 ### Memory honesty
 
-Your saved Walrus memories can suggest a taste anchor (the memory panel mines capitalized names from your own words), but **raw memory content, reasons, and identifiers are never transmitted to Qloo**: only the exact anchor + city strings you approve are sent to the external Qloo lookup. Separately, relevant recalled memories may be included in DeepSeek prompts to shape the recommendation text — that stays between our server and the chat model, never Qloo. Dining turns are session-only and never written as durable memories. The demonstration below works with memory saving OFF: “Nobu” is typed by hand, not recalled from a saved memory.
+Your saved Walrus memories can suggest a taste anchor (the memory panel mines capitalized names from your own words), but **raw memory content, reasons, and identifiers are never transmitted to Qloo**: Qloo receives the approved anchor/city inputs, resolves the anchor to a Qloo entity, and that Qloo-returned entity ID drives the Insights lookup. Separately, relevant recalled memories may be included in DeepSeek prompts to shape the recommendation text — that stays between our server and the chat model, never Qloo. Dining turns are session-only and never written as durable memories. The demonstration below works with memory saving OFF: “Nobu” is typed by hand, not recalled from a saved memory.
 
 ### Where Qloo sits in the architecture
 
@@ -150,6 +122,34 @@ Server-only Qloo adapter (Search + Insights with `feature.explainability`, stric
 - Focused suites: 69/69 pass DB-less (adapter parsing incl. malformed upstream, approval consent incl. 15 accepts / 12 rejects with zero-Qloo proofs, correction comparison, rate-limit fail-closed). Desktop/mobile Playwright: 12/12 intercepted journeys + live-screenshot runs with zero console errors and zero failed requests.
 - Live-verified on production: Nobu → `FF6EE520` + 3 Lagos venues; Terra → `B15A3789` + 3 changed venues; all 3 photos load (`200 image/jpeg`) with entity-matched URLs; empty/gibberish anchors return honest errors.
 - Limitations: venue notes depend on Qloo coverage (thin venues show names + ranking only); Qloo affinity is a ranking signal, not a match probability; availability, prices, and bookings are never verified; the live chat voice still awaits a recorded owner browser pass.
+
+### Product gallery
+
+> **Visual placeholders:** Add your actual screenshots to `docs/media/` before publishing a demo-focused README. These slots are deliberately labelled rather than displaying invented product screenshots or broken image links.
+
+<p align="center"><strong>01 — The cinematic opening</strong></p>
+<p align="center"><em>📷 Add <code>docs/media/landing-hero.png</code> — folded-A reveal / orbital hero</em></p>
+
+<!-- Replace the placeholder above after adding your real screenshot:
+<p align="center"><img src="./docs/media/landing-hero.png" alt="Anghkooey's dark cinematic landing page" width="900" /></p>
+-->
+
+<p align="center"><strong>02 — A conversation that remembers</strong></p>
+<p align="center"><em>📷 Add <code>docs/media/web-chat.png</code> — web chat with a real memory-recall receipt</em></p>
+
+<!-- Replace the placeholder above after adding your real screenshot:
+<p align="center"><img src="./docs/media/web-chat.png" alt="Anghkooey web chat showing a recalled Walrus memory" width="900" /></p>
+-->
+
+<p align="center"><strong>03 — Memories, corrections, and connections</strong></p>
+<p align="center"><em>📷 Add <code>docs/media/memories-and-profile.png</code> — memory archive and channel linking</em></p>
+
+<!-- Replace the placeholder above after adding your real screenshot:
+<p align="center"><img src="./docs/media/memories-and-profile.png" alt="Anghkooey memory archive and connected-channel profile" width="900" /></p>
+-->
+
+**Demo video:** _[Add your public demo link here after publication]._  
+**Mainnet evidence:** _[Add a sanitized proof/evidence link here when available; do not expose user content]._ 
 
 ## How memory works
 
