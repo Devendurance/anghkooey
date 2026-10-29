@@ -16,7 +16,6 @@ import {
   latestDiningProposal,
   planDiningTurn,
 } from "@/server/dining";
-
 // All fixtures SYNTHETIC. DB, DeepSeek, and Qloo are mocked: no network,
 // no Mainnet, no database connection.
 
@@ -280,5 +279,84 @@ describe("dining orchestrator (mocked provider + composer)", () => {
 
   it("clarify copy is exported and honest", () => {
     expect(buildDiningClarify("both", { anchor: null, city: null })).toMatch(/need both/i);
+  });
+});
+
+describe("approval safety regressions (consent fix)", () => {
+  const COMPLETED_HISTORY = [
+    ...PROPOSAL_HISTORY,
+    { role: "user" as const, text: "Yes, please" },
+    { role: "assistant" as const, text: "Grounded picks: Synthetic One, Synthetic Two." },
+  ];
+  const OLD_PROPOSAL_HISTORY = [
+    { role: "user" as const, text: "Find dining like Nobu in Lagos" },
+    { role: "assistant" as const, text: PROPOSAL },
+    { role: "assistant" as const, text: "By the way, I also handle hotel briefs." },
+  ];
+  const TERRA_PROPOSAL = buildDiningProposal("Terra", "Lagos");
+  const CORRECTED_HISTORY = [
+    ...PROPOSAL_HISTORY,
+    { role: "user" as const, text: "Actually make it Terra" },
+    { role: "assistant" as const, text: TERRA_PROPOSAL },
+  ];
+
+  it("Yes immediately after proposal → approved", () => {
+    expect(planDiningTurn("Yes", PROPOSAL_HISTORY)).toEqual({
+      kind: "approved",
+      anchor: "Nobu",
+      city: "Lagos",
+    });
+  });
+
+  it("No thanks → NOT approved and makes zero Qloo requests", async () => {
+    expect(planDiningTurn("No thanks", PROPOSAL_HISTORY).kind).toBe("none");
+    const fetchFn = mockQlooOk();
+    mockChat.mockResolvedValue("No problem — let me know if you change your mind.");
+    const res = await msg("No thanks");
+    expect(res.dining).toBeNull();
+    expect(fetchFn).not.toHaveBeenCalled();
+  });
+
+  it("unrelated question → NOT approved and makes zero Qloo requests", async () => {
+    expect(planDiningTurn("What's the weather in Lagos?", PROPOSAL_HISTORY).kind).toBe("none");
+    const fetchFn = mockQlooOk();
+    mockChat.mockResolvedValue("I don't have live weather, sorry.");
+    const res = await msg("What's the weather in Lagos?");
+    expect(res.dining).toBeNull();
+    expect(fetchFn).not.toHaveBeenCalled();
+  });
+
+  it("Yes without prior proposal → NOT approved and makes zero Qloo requests", async () => {
+    expect(planDiningTurn("Yes", []).kind).toBe("none");
+    const fetchFn = mockQlooOk();
+    mockChat.mockResolvedValue("Yes to what, exactly?");
+    const res = await msg("Yes");
+    expect(res.dining).toBeNull();
+    expect(fetchFn).not.toHaveBeenCalled();
+  });
+
+  it("repeated yes after completed lookup → NOT approved", () => {
+    expect(planDiningTurn("Yes", COMPLETED_HISTORY).kind).toBe("none");
+  });
+
+  it("old proposal followed by unrelated assistant message → NOT approved", () => {
+    expect(latestDiningProposal(OLD_PROPOSAL_HISTORY)).toBeNull();
+    expect(planDiningTurn("Yes", OLD_PROPOSAL_HISTORY).kind).toBe("none");
+  });
+
+  it("corrected anchor → new proposal (never silent approval)", () => {
+    expect(planDiningTurn("Actually make it Terra", PROPOSAL_HISTORY)).toEqual({
+      kind: "propose",
+      anchor: "Terra",
+      city: "Lagos",
+    });
+  });
+
+  it("approval of corrected proposal → approved with corrected values", () => {
+    expect(planDiningTurn("Yes", CORRECTED_HISTORY)).toEqual({
+      kind: "approved",
+      anchor: "Terra",
+      city: "Lagos",
+    });
   });
 });

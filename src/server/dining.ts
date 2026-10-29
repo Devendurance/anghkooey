@@ -131,6 +131,17 @@ export function isAffirmative(text: string): boolean {
   return AFFIRMATIVE_RE.test(text.trim());
 }
 
+const DENIAL_RE =
+  /^\s*(no|nope|nah|cancel|stop|never mind|don't|dont|not now|not really)\b/i;
+
+/** A question that is not about dining (wh-word / question mark). */
+const UNRELATED_Q_RE =
+  /\?|^\s*(what|where|when|why|how|who|which|is|are|was|were|can|could|do|does|did|will|would|tell me about)\b/i;
+
+export function isDenial(text: string): boolean {
+  return DENIAL_RE.test(text.trim());
+}
+
 // Stable machine-readable proposal marker. The template below must keep
 // this exact shape: Qloo dining lookup — anchor “X” in “Y”.
 const PROPOSAL_RE = /Qloo dining lookup \u2014 anchor \u201c(.+?)\u201d in \u201c(.+?)\u201d\./;
@@ -138,18 +149,21 @@ const PROPOSAL_RE = /Qloo dining lookup \u2014 anchor \u201c(.+?)\u201d in \u201
 export function latestDiningProposal(
   history: { role: "user" | "assistant"; text: string }[]
 ): DiningParams & { anchor: string; city: string } | null {
-  const last = history
-    .filter((h) => h.role === "assistant")
-    .slice(-3)
-    .reverse();
-  for (const h of last) {
-    const m = h.text.match(PROPOSAL_RE);
-    if (m?.[1] && m?.[2]) return { anchor: m[1], city: m[2] };
-  }
-  return null;
+  // Only the latest assistant message counts: an older proposal superseded
+  // by any later assistant message is no longer actionable.
+  const assistants = history.filter((h) => h.role === "assistant");
+  const last = assistants[assistants.length - 1];
+  if (!last) return null;
+  const m = last.text.match(PROPOSAL_RE);
+  if (!m?.[1] || !m?.[2]) return null;
+  return { anchor: m[1], city: m[2] };
 }
 
-/** Pure turn planner: no I/O, no network. Approval never fires without a prior proposal. */
+/** Pure turn planner: no I/O, no network.
+ * Approval requires ALL of: a pending proposal in the latest assistant
+ * message, explicit affirmative intent in the current message, and no new
+ * anchor/city contradicting the proposal. Anything else proposes, clarifies,
+ * or leaves the dining path — Qloo is never reached without approval. */
 export function planDiningTurn(
   text: string,
   history: { role: "user" | "assistant"; text: string }[]
@@ -159,25 +173,43 @@ export function planDiningTurn(
   const current = extractDiningParams([text]);
   const proposal = latestDiningProposal(history);
   const intent = detectDiningIntent(text);
+  const yes = isAffirmative(text);
 
   if (proposal) {
-    const restated =
-      params.anchor === proposal.anchor && params.city === proposal.city;
-    const refinedNothing =
-      isAffirmative(text) && !current.anchor && !current.city;
-    if (restated || refinedNothing) {
+    const contradicts =
+      (current.anchor !== null && current.anchor !== proposal.anchor) ||
+      (current.city !== null && current.city !== proposal.city);
+    // Pending proposal + explicit yes + nothing contradicted: approved.
+    if (yes && !contradicts) {
       return { kind: "approved", anchor: proposal.anchor, city: proposal.city };
     }
-    if (params.anchor && params.city) {
-      return { kind: "propose", anchor: params.anchor, city: params.city };
+    // An unrelated question never re-triggers, even if it names the city.
+    if (!intent && UNRELATED_Q_RE.test(text)) {
+      return { kind: "none" as const };
     }
-    if (intent) {
+    // A corrected anchor/city always starts a NEW proposal needing fresh approval.
+    if (current.anchor !== null || current.city !== null) {
       return {
-        kind: "clarify",
-        missing: !params.anchor && !params.city ? "both" : !params.anchor ? "anchor" : "city",
+        kind: "propose" as const,
+        anchor: current.anchor ?? proposal.anchor,
+        city: current.city ?? proposal.city,
       };
     }
-    return { kind: "none" };
+    // Explicit denial or an unrelated question: leave the dining path.
+    if (isDenial(text) || !intent) {
+      return { kind: "none" as const };
+    }
+    // Intent without fresh approval: re-propose when complete, else clarify.
+    if (params.anchor && params.city) {
+      return { kind: "propose" as const, anchor: params.anchor, city: params.city };
+    }
+    return {
+      kind: "clarify" as const,
+      missing: (!params.anchor && !params.city ? "both" : !params.anchor ? "anchor" : "city") as
+        | "both"
+        | "anchor"
+        | "city",
+    };
   }
 
   if (params.anchor && params.city && intent) {
