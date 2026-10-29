@@ -11,9 +11,11 @@ import {
 } from "../src/server/linking";
 import { listMemoriesUnion } from "../src/server/repo";
 
+const dbSuite = process.env.DATABASE_URL ? describe : describe.skip;
+
 const tag = () => `${Date.now().toString(36)}${Math.floor(Math.random() * 1e6)}`;
 
-describe("existing-account consolidation (real Neon, throwaway users)", () => {
+dbSuite("existing-account consolidation (real Neon, throwaway users)", () => {
   it("merges a standalone channel account into a web account with memory preserved", async () => {
     const sql = getSql();
     const t = tag();

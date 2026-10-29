@@ -21,7 +21,8 @@
     "identity:diagnose": "tsx scripts/identity-diagnose.ts",
     "test:qa": "tsx scripts/qa-preflight.ts && vitest run",
     "qa:approve": "tsx scripts/qa-preflight.ts --approve",
-    "test:e2e": "LD_LIBRARY_PATH=$HOME/.playwright-deps/libs/usr/lib/x86_64-linux-gnu playwright test"
+    "test:e2e": "LD_LIBRARY_PATH=$HOME/.playwright-deps/libs/usr/lib/x86_64-linux-gnu playwright test",
+    "test:e2e:intercepted": "bash scripts/qa-e2e-intercepted.sh"
   },
   "dependencies": {
     "@gsap/react": "^2.1.2",

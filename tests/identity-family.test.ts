@@ -5,6 +5,8 @@ import { getSql } from "../src/server/db";
 import { getAliasUserIds, getCanonicalUserId } from "../src/server/linking";
 import { countMemoriesUnion, listMemoriesUnion } from "../src/server/repo";
 
+const dbSuite = process.env.DATABASE_URL ? describe : describe.skip;
+
 // Real Neon, throwaway users, mocked Walrus writer: no Mainnet writes.
 const t = `${Date.now().toString(36)}${Math.floor(Math.random() * 1e6)}`;
 const users: string[] = [];
@@ -36,7 +38,7 @@ async function addMemory(userId: string, tag: string) {
   return blobId;
 }
 
-describe("chained identity families (real Neon)", () => {
+dbSuite("chained identity families (real Neon)", () => {
   beforeAll(async () => {
     A = await newUser();
     B = await newUser();

@@ -291,7 +291,20 @@ npm run build
 npm run check:integrations
 ```
 
-Some integration tests require database access. `photon:readiness` is the dedicated Photon check; the generic integration checker may contain legacy Photon status wording. Scripts such as `smoke:memory` and `test-channel-flow` can perform **real, chargeable Mainnet writes** — run them deliberately, not as routine build checks.
+Some integration tests require database access. Real-Neon suites skip honestly
+when `DATABASE_URL` is empty (clean-checkout default); set an isolated QA
+branch URL explicitly to run them — never point them at production.
+`photon:readiness` is the dedicated Photon check; the generic integration
+checker may contain legacy Photon status wording. Scripts such as
+`smoke:memory` and `test-channel-flow` can perform **real, chargeable Mainnet
+writes** — run them deliberately, not as routine build checks.
+
+```bash
+# DB-less intercepted browser suite (no secrets, no prod writes).
+# Builds, starts a local QA server on 127.0.0.1:3101, runs 14 Chromium
+# checks (desktop + mobile, live-Qloo test excluded), then stops the server.
+npm run test:e2e:intercepted
+```
 
 ## Project structure
 

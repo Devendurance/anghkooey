@@ -12,6 +12,9 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Film-evidence assets (vendored gsap.min.js + plain node scripts).
+    // Vitest already excludes videos/**; lint the app, not the evidence.
+    "videos/**",
   ]),
 ]);
 

@@ -4,6 +4,8 @@ import { correctMemory } from "../src/server/corrections";
 import { getSql } from "../src/server/db";
 import { getSupersededIds } from "../src/server/repo";
 
+const dbSuite = process.env.DATABASE_URL ? describe : describe.skip;
+
 // Real Neon, throwaway users, fake Walrus writer: no Mainnet writes.
 const t = `${Date.now().toString(36)}${Math.floor(Math.random() * 1e6)}`;
 const users: string[] = [];
@@ -43,7 +45,7 @@ async function row(blobId: string) {
 
 const text = "I want a quiet room on a high floor, far from the lift.";
 
-describe("memory corrections across canonical and merged identities (real Neon)", () => {
+dbSuite("memory corrections across canonical and merged identities (real Neon)", () => {
   beforeAll(async () => {
     web = await newUser();
     channel = await newUser();

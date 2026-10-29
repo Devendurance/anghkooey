@@ -7,6 +7,8 @@ import { confirmLink, confirmMerge, getChannelStatus, requestMerge, startLink } 
 import { getConsentAt, setConsent } from "../src/server/repo";
 import { createWebSession, revokeSessionToken, SESSION_COOKIE, validateSessionToken } from "../src/server/session";
 
+const dbSuite = process.env.DATABASE_URL ? describe : describe.skip;
+
 // Real Neon, throwaway users, fake sender ids. No Walrus calls.
 const t = `${Date.now().toString(36)}${Math.floor(Math.random() * 1e6)}`;
 const users: string[] = [];
@@ -32,7 +34,7 @@ const req = (token?: string, init?: RequestInit) =>
     headers: { host: "localhost:3000", ...(token ? { cookie: `${SESSION_COOKIE}=${token}` } : {}) },
   });
 
-describe("account linking, channel status and sessions (real Neon)", () => {
+dbSuite("account linking, channel status and sessions (real Neon)", () => {
   let web = "";
   let token = "";
 

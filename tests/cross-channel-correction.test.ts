@@ -1,6 +1,8 @@
 import "dotenv/config";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
+const dbSuite = process.env.DATABASE_URL ? describe : describe.skip;
+
 const mocks = vi.hoisted(() => ({
   extraction: "[]",
   saves: [] as { userId: string }[],
@@ -65,7 +67,7 @@ const baseFact = {
   sensitive: false,
 };
 
-describe("orchestrator cross-channel chat corrections (real Neon, mocked Walrus)", () => {
+dbSuite("orchestrator cross-channel chat corrections (real Neon, mocked Walrus)", () => {
   beforeAll(async () => {
     web = await newUser();
     channel = await newUser();

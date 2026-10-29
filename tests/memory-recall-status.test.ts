@@ -66,7 +66,7 @@ describe("recall prompt honesty", () => {
     const msgs = buildGroundedMessages({ userText: "Do you remember anything about me?", memories: [], recallStatus: "ok" });
     const block = msgs.map((m) => m.content).join("\n");
     expect(block).toContain("does NOT mean");
-    expect(block).toContain("Never claim an empty account");
+    expect(block).toContain("Never claim to have no stored preferences");
     expect(block).not.toMatch(/no saved memories exist/i);
   });
 

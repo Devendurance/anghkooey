@@ -4,6 +4,8 @@ import { POST } from "../src/app/api/session/route";
 import { getSql } from "../src/server/db";
 import { createWebSession, SESSION_COOKIE } from "../src/server/session";
 
+const dbSuite = process.env.DATABASE_URL ? describe : describe.skip;
+
 const t = `${Date.now().toString(36)}${Math.floor(Math.random() * 1e6)}`;
 const users: string[] = [];
 const buckets: string[] = [];
@@ -14,7 +16,7 @@ function req(ip: string, token?: string) {
   return new Request("http://localhost:3000/api/session", { method: "POST", headers });
 }
 
-describe("POST /api/session reuse before rate limit (real Neon)", () => {
+dbSuite("POST /api/session reuse before rate limit (real Neon)", () => {
   afterAll(async () => {
     const sql = getSql();
     for (const b of buckets) await sql`delete from rate_limits where bucket_key = ${b}`.catch(() => []);
