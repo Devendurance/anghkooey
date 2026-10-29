@@ -56,6 +56,7 @@ const FRIENDLY: Record<string, string> = {
   qloo_no_match: "Qloo has no match for that anchor.",
   qloo_not_configured: "Taste lookup is not configured on this server.",
   rate_limited: "Too many lookups. Slow down and retry.",
+  rate_limit_unavailable: "Taste lookup is temporarily unavailable. Try again shortly.",
   qloo_rate_limited: "Qloo is rate-limiting taste lookups.",
   qloo_unauthorized: "This server's Qloo credentials were rejected.",
   qloo_unavailable: "Qloo is unreachable right now.",

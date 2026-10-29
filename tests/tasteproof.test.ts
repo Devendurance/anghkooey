@@ -2,6 +2,13 @@ import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
 import { GET } from "@/app/api/tasteproof/route";
 import { placeInsights, searchAnchor } from "@/server/qloo";
 
+// Fail-closed contract: the route verifies the rate-limit store before Qloo.
+// Mock allowance here so these Qloo-focused tests stay offline and DB-free.
+vi.mock("@/server/rate-limit", async (importOriginal) => {
+  const mod = await importOriginal<typeof import("@/server/rate-limit")>();
+  return { ...mod, checkRateLimitStrict: vi.fn().mockResolvedValue({ ok: true, allowed: true, remaining: 19 }) };
+});
+
 // All payloads below are SYNTHETIC fixtures for offline regression tests.
 // They are labeled synthetic and never represent live Qloo responses.
 

@@ -1,6 +1,6 @@
 import { clientIp, err, ok } from "@/server/api";
 import { placeInsights, searchAnchor } from "@/server/qloo";
-import { checkRateLimit, rateLimitedResponse } from "@/server/rate-limit";
+import { checkRateLimitStrict, rateLimitedResponse } from "@/server/rate-limit";
 
 /**
  * GET /api/tasteproof?anchor=Nobu%20Restaurant&city=Lagos
@@ -13,12 +13,12 @@ export async function GET(req: Request) {
   const anchor = (url.searchParams.get("anchor") ?? "").trim();
   const city = (url.searchParams.get("city") ?? "").trim();
 
-  try {
-    const rl = await checkRateLimit(`tasteproof:${clientIp(req)}`, 20, 60_000);
-    if (!rl.allowed) return err(429, "rate_limited", rateLimitedResponse().error.message);
-  } catch {
-    // Fail open when the rate-limit store is unavailable (e.g. no DATABASE_URL).
-  }
+  // Fail CLOSED: never call Qloo unless the rate-limit store verifies allowance.
+  // Missing or unreachable storage returns an honest 503; verified quota
+  // exhaustion returns 429. Other endpoints keep the legacy fail-open helper.
+  const rl = await checkRateLimitStrict(`tasteproof:${clientIp(req)}`, 20, 60_000);
+  if (!rl.ok) return err(503, "rate_limit_unavailable", "Taste lookup is temporarily unavailable. Try again shortly.");
+  if (!rl.allowed) return err(429, "rate_limited", rateLimitedResponse().error.message);
 
   const s = await searchAnchor(anchor);
   if (!s.ok) return err(s.failure.http, `qloo_${s.failure.status}`, s.failure.message);
