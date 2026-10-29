@@ -359,4 +359,57 @@ describe("approval safety regressions (consent fix)", () => {
       city: "Lagos",
     });
   });
+
+  it("accepts only clear full-message approvals", () => {
+    const accept = [
+      "Yes",
+      "yes.",
+      "YES!",
+      "Yes, please",
+      "yes please",
+      "Go ahead",
+      "go ahead please",
+      "Please do",
+      "please do",
+      "Approved",
+      "approved.",
+      "ok",
+      "Sure",
+      "Look it up",
+      "yeah, go ahead",
+    ];
+    for (const a of accept) expect(isAffirmative(a)).toBe(true);
+  });
+
+  it("rejects ambiguous, conditional, contradictory, negative, and question responses", () => {
+    const reject = [
+      "Okay, what's the weather in Lagos?",
+      "Yes, but don't do it",
+      "Sure, maybe later",
+      "No",
+      "Maybe tomorrow",
+      "Yes?",
+      "What is it?",
+      "Approved, but only if it's free",
+      "Yes, after lunch",
+      "I don't know",
+      "Yes, but not now",
+      "Sure, when I arrive",
+    ];
+    for (const r of reject) expect(isAffirmative(r)).toBe(false);
+  });
+
+  it("rejected approvals with a pending proposal never reach Qloo", async () => {
+    const rejected = ["Yes, but don't do it", "Sure, maybe later", "Okay, what's the weather in Lagos?"];
+    for (const text of rejected) {
+      expect(planDiningTurn(text, PROPOSAL_HISTORY).kind).not.toBe("approved");
+    }
+    const fetchFn = mockQlooOk();
+    mockChat.mockResolvedValue("Noted.");
+    for (const text of rejected) {
+      const res = await msg(text);
+      expect(res.dining).toBeNull();
+    }
+    expect(fetchFn).not.toHaveBeenCalled();
+  });
 });

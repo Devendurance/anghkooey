@@ -124,11 +124,25 @@ export function detectDiningIntent(text: string): boolean {
   return REQUEST_RE.test(t) || LIKE_RE.test(t);
 }
 
-const AFFIRMATIVE_RE =
-  /^\s*(yes|yeah|yep|yup|sure|ok|okay|go ahead|do it|look it up|please do|approve|approved|yes please|lets do it|let's do it)\b/i;
+/** Reject: questions, conditions, contradictions, negatives, deferrals. Checked first. */
+const AFFIRMATIVE_REJECT_RE =
+  /[?]|\b(but|however|although|though|except|maybe|later|unless|not|never|no|after|when|while|until|what|where|why|how|who|which)\b|n't|only if/i;
+
+/** Accept: after rejection, the whole message must be a clear approval and nothing else. */
+const AFFIRMATIVE_FULL_RES = [
+  /^(yes|yeah|yep|yup|sure|ok|okay|approved)(\s+(please|thanks|thank you))?$/,
+  /^(go ahead|proceed|sounds good|look it up)(\s+please)?$/,
+  /^(please\s+)?(do|run)\s+(it|the lookup)$/,
+  /^please do$/,
+  /^(yes|yeah|yep|yup|sure|ok|okay),?\s+(go ahead|do it|look it up|please|please do)$/,
+  /^let's do it$/,
+  /^lets do it$/,
+];
 
 export function isAffirmative(text: string): boolean {
-  return AFFIRMATIVE_RE.test(text.trim());
+  const t = text.trim().toLowerCase().replace(/[.!\s]+$/, "");
+  if (!t || AFFIRMATIVE_REJECT_RE.test(t)) return false;
+  return AFFIRMATIVE_FULL_RES.some((re) => re.test(t));
 }
 
 const DENIAL_RE =
