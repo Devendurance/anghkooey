@@ -82,6 +82,75 @@ A quiet hotel room matters differently when you've said road noise kept you awak
 **Demo video:** _[Add your public demo link here after publication]._  
 **Mainnet evidence:** _[Add a sanitized proof/evidence link here when available; do not expose user content]._ 
 
+## TasteProof × Qloo: culturally grounded dining
+
+> **Hackathon addition (October 2026):** TasteProof connects Anghkooey's memory-aware concierge to [Qloo's](https://www.qloo.com/) cultural-intelligence API. The rest of Anghkooey — DeepSeek chat, Walrus memories, Neon identity, Photon messaging — is the pre-existing product; Qloo is the new taste layer.
+
+**Problem:** travel assistants forget why you liked a place, and generic "best restaurants" lists ignore your taste. **Solution:** Anghkooey resolves a named cultural anchor you approve (e.g. *Nobu Restaurant*) through live Qloo Search, reruns Qloo Insights for the destination city, and grounds its recommendation ONLY in the venues Qloo actually returns — with photos, tags, affinity, and an explicit correction/Undo loop.
+
+<p align="center"><img src="./docs/media/qloo-tasteproof-desktop.png" alt="TasteProof dining discovery on desktop: three photographic Qloo venue cards for Lagos with tags and affinity" width="900" /></p>
+<p align="center"><em>TasteProof discovery: “Nobu Restaurant” in Lagos → Izanagi Japanese Cuisine, ILE EROS LAGOS, Talindo Steak House. Photos: Qloo.</em></p>
+
+### How the agentic flow works
+
+1. **You ask in web chat** (`/chat`): *“Find dining like Nobu in Lagos.”*
+2. **The concierge proposes — it does not fire yet:** it names the exact anchor and city and asks for a yes. Nothing leaves the chat until you approve.
+3. **On approval it runs live Qloo Search + Insights** (server-side, strict per-user rate limit, only the anchor/city strings cross to Qloo).
+4. **DeepSeek answers grounded in the returned venues only**, separating (a) Qloo's cultural signal, (b) your remembered preferences, and (c) what is NOT verified (availability, prices, bookings).
+5. **Missing details are asked, never invented:** no city → it asks for one; no named anchor → it asks for one and won't guess.
+6. **Corrections re-propose:** *“make it Terra”* starts a new proposal needing a fresh yes; denials and unrelated questions never trigger a lookup.
+
+### TasteProof visual discovery (`/taste`)
+
+The same live Qloo evidence rendered as inspectable photographic cards: venue photo, Qloo description, cultural tags, address, and Qloo affinity — explicitly labeled as Qloo's ranking signal, never a match percentage.
+
+<p align="center"><img src="./docs/media/qloo-tasteproof-evidence.png" alt="Close-up of a TasteProof venue card showing Qloo description, tags and affinity" width="600" /></p>
+<p align="center"><em>One card, fully attributed: Qloo description, tags, affinity, and address. Photos: Qloo.</em></p>
+
+Change the anchor and TasteProof reruns Qloo, showing a real before/after comparison (added/removed/reordered by actual Qloo IDs) with an Undo that restores the prior result without another lookup.
+
+<p align="center"><img src="./docs/media/qloo-tasteproof-comparison.png" alt="TasteProof before/after comparison after correcting the anchor to Terra Kulture, with Undo control" width="900" /></p>
+<p align="center"><em>Anchor correction: Nobu → Terra Kulture. Real changed candidates, honest unchanged states, one-click Undo.</em></p>
+
+The layout is responsive — the same discovery on a phone:
+
+<p align="center"><img src="./docs/media/qloo-tasteproof-mobile.png" alt="TasteProof dining discovery on a mobile viewport" width="320" /></p>
+
+### Memory honesty
+
+Your saved Walrus memories can suggest a taste anchor (the memory panel mines capitalized names from your own words), but **raw memory text, reasons, and identifiers never leave the server**: only the exact anchor + city strings you approve are sent to Qloo. Dining turns are session-only and never written as durable memories.
+
+### Where Qloo sits in the architecture
+
+```mermaid
+flowchart LR
+    U[User] --> CHAT[Web chat / /taste]
+    CHAT --> APP{Explicit approval?}
+    APP -- yes, anchor + city --> QLOO[Qloo Search + Insights\nserver-only, rate-limited]
+    APP -- no / missing details --> ASK[Clarify or stand down]
+    QLOO --> EV[Typed evidence:\nvenues, tags, affinity, photos]
+    EV --> DS[DeepSeek Flash\ngrounded answer only]
+    DS --> U
+    MEM[(Walrus memories)] -. suggest only .-> APP
+```
+
+### Try it (no credentials needed)
+
+1. Open https://anghkooey.vercel.app/taste — anchor and city are pre-filled (`Nobu Restaurant`, `Lagos`).
+2. Press **Find dining candidates**. Real Qloo venues appear with photos and evidence.
+3. Change the anchor to `Terra Kulture`, press **Approve revised Qloo lookup**, and watch the before/after comparison. Press **Undo** to restore.
+4. Or use `/chat`: *“Find dining like Nobu in Lagos”* → say *“Yes”* → grounded recommendation. (Memory panel use is optional.)
+
+### What was added during the hackathon
+
+Server-only Qloo adapter (Search + Insights with `feature.explainability`, strict fail-closed rate limiting), `/api/tasteproof`, the `/taste` page with photographic evidence cards + correction/Undo, the chat approval gate with full-message affirmative precision, Qloo-grounded DeepSeek prompting, and synthetic regression suites. Nothing else changed: no migrations, no new infrastructure, no Photon/Gmail/Walrus behavior changes.
+
+### Verification evidence and limitations
+
+- Focused suites: 69/69 pass DB-less (adapter parsing incl. malformed upstream, approval consent incl. 15 accepts / 12 rejects with zero-Qloo proofs, correction comparison, rate-limit fail-closed). Desktop/mobile Playwright: 12/12 intercepted journeys + live-screenshot runs with zero console errors and zero failed requests.
+- Live-verified on production: Nobu → `FF6EE520` + 3 Lagos venues; Terra → `B15A3789` + 3 changed venues; all 3 photos load (`200 image/jpeg`) with entity-matched URLs; empty/gibberish anchors return honest errors.
+- Limitations: venue notes depend on Qloo coverage (thin venues show names + ranking only); Qloo affinity is a ranking signal, not a match probability; availability, prices, and bookings are never verified; the live chat voice still awaits a recorded owner browser pass.
+
 ## How memory works
 
 1. **Tell Anghkooey what matters.** Share a hotel, travel, or dining preference and, ideally, why it matters.
@@ -185,6 +254,8 @@ Edit `.env` locally. Never commit it, paste credentials into issues, or expose k
 | `PHOTON_PROJECT_ID` | Photon project identifier, for the worker |
 | `PHOTON_PROJECT_SECRET` | Photon server credential, for the worker |
 | `TELEGRAM_BOT_TOKEN` | Telegram bot credential, for the worker |
+| `QLOO_API_KEY` | Qloo hackathon API credential (server-only; required for TasteProof) |
+| `QLOO_BASE_URL` | Qloo API base URL (optional; defaults to the hackathon endpoint) |
 
 The repository's [`.env.example`](./.env.example) is the canonical variable-name reference.
 
