@@ -36,6 +36,35 @@ export const NOT_VERIFIED = [
   "Reservations and opening hours",
 ] as const;
 
+/** Session-local before/after comparison based only on real Qloo IDs and order. No invented reasons. */
+export type TasteComparison = {
+  unchanged: boolean;
+  added: string[];
+  removed: string[];
+  kept: string[];
+  reordered: boolean;
+  beforeOrder: string[];
+  afterOrder: string[];
+};
+
+/** Compare two Insights candidate ID lists. True when same IDs in the same order. */
+export function compareTasteCandidates(beforeIds: string[], afterIds: string[]): TasteComparison {
+  const beforeOrder = [...beforeIds];
+  const afterOrder = [...afterIds];
+  const beforeSet = new Set(beforeOrder);
+  const afterSet = new Set(afterOrder);
+  const added = afterOrder.filter((id) => !beforeSet.has(id));
+  const removed = beforeOrder.filter((id) => !afterSet.has(id));
+  const kept = beforeOrder.filter((id) => afterSet.has(id));
+  const keptAfterOrder = afterOrder.filter((id) => beforeSet.has(id));
+  const reordered =
+    kept.length > 1 && kept.some((id, i) => keptAfterOrder[i] !== id);
+  const unchanged =
+    beforeOrder.length === afterOrder.length &&
+    beforeOrder.every((id, i) => afterOrder[i] === id);
+  return { unchanged, added, removed, kept, reordered, beforeOrder, afterOrder };
+}
+
 /** True when the text contains a capitalized name-like token (min 3 letters). */
 export function anchorLooksNamed(anchor: string): boolean {
   return /[A-Z][A-Za-z]{2,}/.test(anchor.trim());

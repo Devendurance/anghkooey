@@ -99,6 +99,115 @@ test("provider outage renders the configured-state copy without fixtures", async
   await page.screenshot({ path: "test-artifacts/taste-not-configured.png" });
 });
 
+test("correction reruns Qloo and shows honest before/after with undo", async ({ page }) => {
+  const first = {
+    ok: true,
+    anchor: "Nobu Restaurant",
+    city: "Lagos",
+    resolved: { name: "Nobu Restaurant", entity_id: "QLOO-BEFORE-1", kind: "restaurant" },
+    searchTotal: 20,
+    candidates: [
+      { name: "Before One", entity_id: "CAND-A", kind: "place", place: "Lagos", explanation: "Before affinity." },
+      { name: "Before Two", entity_id: "CAND-B", kind: "place", place: null, explanation: null },
+    ],
+    evidence: { anchor: "Nobu Restaurant", entityId: "QLOO-BEFORE-1", entityKind: "restaurant", candidateIds: ["CAND-A", "CAND-B"], city: "Lagos" },
+  };
+  const second = {
+    ok: true,
+    anchor: "Terra Kulture",
+    city: "Lagos",
+    resolved: { name: "Terra Kulture", entity_id: "QLOO-AFTER-9", kind: "place" },
+    searchTotal: 20,
+    candidates: [
+      { name: "Before Two", entity_id: "CAND-B", kind: "place", place: null, explanation: null },
+      { name: "After Three", entity_id: "CAND-C", kind: "place", place: "Lagos", explanation: null },
+    ],
+    evidence: { anchor: "Terra Kulture", entityId: "QLOO-AFTER-9", entityKind: "place", candidateIds: ["CAND-B", "CAND-C"], city: "Lagos" },
+  };
+  await page.route("**/api/tasteproof**", (route) => {
+    const url = new URL(route.request().url());
+    const a = (url.searchParams.get("anchor") ?? "").toLowerCase();
+    const payload = a.includes("terra") ? second : first;
+    return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(payload) });
+  });
+  await page.goto("/taste");
+  await page.getByRole("button", { name: /find dining candidates/i }).click();
+  await expect(page.getByText("Before One").first()).toBeVisible({ timeout: 15000 });
+  await expect(page.locator("#taste-correct-anchor")).toBeVisible();
+  // Changing the input alone must not refetch: no comparison yet.
+  await page.locator("#taste-correct-anchor").fill("Terra Kulture");
+  await expect(page.getByLabel("Correction comparison")).toBeHidden();
+  await page.getByRole("button", { name: /approve revised qloo lookup/i }).click();
+  const comp = page.getByLabel("Correction comparison");
+  await expect(comp).toBeVisible({ timeout: 15000 });
+  await expect(comp.getByText(/Changed:/)).toBeVisible();
+  await expect(comp.getByText(/Added:/)).toContainText("After Three");
+  await expect(comp.getByText(/Removed:/)).toContainText("Before One");
+  await expect(page.getByText(/session only: your saved memories are unchanged/i).first()).toBeVisible();
+  await page.getByRole("button", { name: /undo correction/i }).click();
+  await expect(page.locator("#taste-anchor")).toHaveValue("Nobu Restaurant");
+  await expect(page.getByText("Before One").first()).toBeVisible();
+  await expect(page.getByLabel("Correction comparison")).toBeHidden();
+});
+
+test("unchanged correction says so honestly", async ({ page }) => {
+  const payload = {
+    ok: true,
+    anchor: "Nobu Restaurant",
+    city: "Lagos",
+    resolved: { name: "Nobu Restaurant", entity_id: "QLOO-SAME-1", kind: "restaurant" },
+    searchTotal: 5,
+    candidates: [
+      { name: "Same One", entity_id: "SAME-A", kind: "place", place: null, explanation: null },
+    ],
+    evidence: { anchor: "Nobu Restaurant", entityId: "QLOO-SAME-1", entityKind: "restaurant", candidateIds: ["SAME-A"], city: "Lagos" },
+  };
+  await page.route("**/api/tasteproof**", (route) =>
+    route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(payload) })
+  );
+  await page.goto("/taste");
+  await page.getByRole("button", { name: /find dining candidates/i }).click();
+  await expect(page.getByText("Same One").first()).toBeVisible({ timeout: 15000 });
+  await page.locator("#taste-correct-anchor").fill("Nobu Restaurant");
+  await page.getByRole("button", { name: /approve revised qloo lookup/i }).click();
+  await expect(page.getByLabel("Correction comparison")).toBeVisible({ timeout: 15000 });
+  await expect(page.getByText(/no measurable change/i).first()).toBeVisible();
+});
+
+test("failed revised lookup keeps the before result", async ({ page }) => {
+  const good = {
+    ok: true,
+    anchor: "Nobu Restaurant",
+    city: "Lagos",
+    resolved: { name: "Nobu Restaurant", entity_id: "QLOO-KEEP-1", kind: "restaurant" },
+    searchTotal: 5,
+    candidates: [
+      { name: "Keep Me", entity_id: "KEEP-A", kind: "place", place: null, explanation: null },
+    ],
+    evidence: { anchor: "Nobu Restaurant", entityId: "QLOO-KEEP-1", entityKind: "restaurant", candidateIds: ["KEEP-A"], city: "Lagos" },
+  };
+  await page.route("**/api/tasteproof**", (route) => {
+    const url = new URL(route.request().url());
+    const a = (url.searchParams.get("anchor") ?? "").toLowerCase();
+    if (a.includes("xqz")) {
+      return route.fulfill({
+        status: 404,
+        contentType: "application/json",
+        body: JSON.stringify({ ok: false, error: { code: "qloo_no_match", message: 'Qloo has no match for "xqz".' } }),
+      });
+    }
+    return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(good) });
+  });
+  await page.goto("/taste");
+  await page.getByRole("button", { name: /find dining candidates/i }).click();
+  await expect(page.getByText("Keep Me").first()).toBeVisible({ timeout: 15000 });
+  await page.locator("#taste-correct-anchor").fill("xqz-not-a-place-zzz-123");
+  await page.getByRole("button", { name: /approve revised qloo lookup/i }).click();
+  await expect(page.getByText(/qloo has no match for that anchor/i).first()).toBeVisible({ timeout: 15000 });
+  await expect(page.getByText("Keep Me").first()).toBeVisible();
+  await expect(page.getByLabel("Correction comparison")).toBeHidden();
+});
+
 test.afterAll(() => {
   expect(consoleErrors, `unexpected browser errors: ${consoleErrors.join(" | ").slice(0, 500)}`).toEqual([]);
 });

@@ -5,9 +5,11 @@ import { call, errorMessage, factText, shortBlob } from "@/lib/app-client";
 import {
   anchorLooksNamed,
   buildTasteEvidence,
+  compareTasteCandidates,
   guidanceFor,
   suggestAnchors,
   type MemoryPick,
+  type TasteComparison,
 } from "@/lib/taste-evidence";
 
 type Candidate = {
@@ -34,6 +36,14 @@ type Phase =
 
 type MemMatch = { blobId: string; text?: string; fact?: string; state?: string };
 
+type Correction = {
+  before: Result;
+  after: Result;
+  beforeAnchor: string;
+  afterAnchor: string;
+  comparison: TasteComparison;
+};
+
 type MemPhase =
   | { kind: "idle" }
   | { kind: "loading" }
@@ -58,6 +68,10 @@ export function Taste() {
   const [memQuery, setMemQuery] = useState("restaurant food dining");
   const [memPhase, setMemPhase] = useState<MemPhase>({ kind: "idle" });
   const [pick, setPick] = useState<MemoryPick | null>(null);
+  const [correctionInput, setCorrectionInput] = useState("");
+  const [correction, setCorrection] = useState<Correction | null>(null);
+  const [correcting, setCorrecting] = useState(false);
+  const [correctionError, setCorrectionError] = useState<{ code: string; message: string } | null>(null);
 
   const guidance = guidanceFor(anchor);
   const named = anchorLooksNamed(anchor);
@@ -66,6 +80,8 @@ export function Taste() {
     const a = anchor.trim();
     if (!a) return;
     setPhase({ kind: "loading" });
+    setCorrection(null);
+    setCorrectionError(null);
     const params = new URLSearchParams({ anchor: a });
     if (city.trim()) params.set("city", city.trim());
     const r = await call(`/api/tasteproof?${params.toString()}`);
@@ -109,12 +125,53 @@ export function Taste() {
     setPick({ fact: fact || stored, domain, blobId: m.blobId });
   }
 
+  async function approveCorrection() {
+    if (phase.kind !== "done" || correcting) return;
+    const revised = correctionInput.trim();
+    if (revised.length < 2) return;
+    setCorrecting(true);
+    setCorrectionError(null);
+    const params = new URLSearchParams({ anchor: revised });
+    if (city.trim()) params.set("city", city.trim());
+    const r = await call(`/api/tasteproof?${params.toString()}`);
+    if (!r.ok) {
+      const code = (r.body.error as { code?: string } | undefined)?.code ?? "unknown";
+      setCorrectionError({ code, message: errorMessage(r) });
+      setCorrecting(false);
+      return;
+    }
+    const after = r.body as unknown as Result;
+    const comparison = compareTasteCandidates(
+      phase.result.candidates.map((c) => c.entity_id),
+      after.candidates.map((c) => c.entity_id)
+    );
+    setCorrection({
+      before: phase.result,
+      after,
+      beforeAnchor: phase.result.anchor,
+      afterAnchor: after.anchor,
+      comparison,
+    });
+    setAnchor(after.anchor);
+    setPhase({ kind: "done", result: after });
+    setCorrecting(false);
+  }
+
+  function undoCorrection() {
+    if (!correction) return;
+    setAnchor(correction.beforeAnchor);
+    setPhase({ kind: "done", result: correction.before });
+    setCorrection(null);
+    setCorrectionError(null);
+    setCorrectionInput("");
+  }
+
   const evidence =
     phase.kind === "done" ? buildTasteEvidence(pick, phase.result) : null;
 
   return (
     <div className="mem-inner">
-      <p className="mem-eyebrow">TasteProof · Slice 2</p>
+      <p className="mem-eyebrow">TasteProof · Slice 3</p>
       <h1 className="mem-h">One anchor, real cultural signal</h1>
       <p className="mem-lead">
         Supply one named cultural anchor, or pull one from your saved memories. Anghkooey
@@ -362,6 +419,117 @@ export function Taste() {
               </article>
             ))}
           </div>
+          <section aria-labelledby="taste-correction-title" className="mem-card">
+            <h2 id="taste-correction-title" className="mem-h">
+              Correct this taste (session only)
+            </h2>
+            {correction ? (
+              <div>
+                <section aria-label="Correction comparison">
+                  <p className="mem-meta">
+                    Before: “{correction.beforeAnchor}” → {correction.before.resolved.name} (
+                    {shortBlob(correction.before.resolved.entity_id)}) · {correction.before.candidates.length}{" "}
+                    {correction.before.candidates.length === 1 ? "candidate" : "candidates"}
+                  </p>
+                  <p className="mem-meta">
+                    After: “{correction.afterAnchor}” → {correction.after.resolved.name} (
+                    {shortBlob(correction.after.resolved.entity_id)}) · {correction.after.candidates.length}{" "}
+                    {correction.after.candidates.length === 1 ? "candidate" : "candidates"}
+                  </p>
+                  {correction.comparison.unchanged ? (
+                    <p className="mem-meta">
+                      No measurable change: Qloo returned the same candidates in the same order for the revised anchor.
+                    </p>
+                  ) : (
+                    <div>
+                      <p className="mem-meta">
+                        Changed: {correction.comparison.added.length} added ·{" "}
+                        {correction.comparison.removed.length} removed
+                        {correction.comparison.reordered ? " · order changed" : " · order kept"}.
+                        Comparison uses only real Qloo IDs and ordering.
+                      </p>
+                      {correction.comparison.added.length > 0 && (
+                        <p className="mem-meta">
+                          Added:{" "}
+                          {correction.comparison.added
+                            .map((id) => correction.after.candidates.find((c) => c.entity_id === id)?.name ?? shortBlob(id))
+                            .join(" · ")}
+                        </p>
+                      )}
+                      {correction.comparison.removed.length > 0 && (
+                        <p className="mem-meta">
+                          Removed:{" "}
+                          {correction.comparison.removed
+                            .map((id) => correction.before.candidates.find((c) => c.entity_id === id)?.name ?? shortBlob(id))
+                            .join(" · ")}{" "}
+                          — no longer returned for the revised anchor. Qloo gave no reason beyond the new ranking.
+                        </p>
+                      )}
+                      {correction.after.candidates.map((c) => (
+                        <p key={c.entity_id} className="mem-meta">
+                          Why {c.name}? {c.explanation ?? "Qloo explanation: Not available."}
+                        </p>
+                      ))}
+                    </div>
+                  )}
+                  <p className="mem-meta">Session only: your saved memories are unchanged.</p>
+                  <button type="button" className="app-btn app-btn-glass" onClick={undoCorrection}>
+                    Undo correction
+                  </button>
+                </section>
+              </div>
+            ) : (
+              <div>
+                <p className="mem-meta">
+                  Change the named anchor and approve a fresh Qloo Search + Insights rerun. Nothing is
+                  re-fetched until you approve. Session only: your saved memories are unchanged.
+                </p>
+                <div className="mem-filters">
+                  <label className="mem-label" htmlFor="taste-correct-anchor">
+                    Revised anchor
+                    <input
+                      id="taste-correct-anchor"
+                      className="mem-input"
+                      value={correctionInput}
+                      onChange={(e) => setCorrectionInput(e.target.value)}
+                      placeholder={phase.result.anchor}
+                      maxLength={80}
+                      autoComplete="off"
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    className="app-btn app-btn-primary"
+                    onClick={() => void approveCorrection()}
+                    disabled={correcting || correctionInput.trim().length < 2}
+                    title={
+                      correctionInput.trim()
+                        ? `Approve Qloo lookup for “${correctionInput.trim()}”${city.trim() ? ` in ${city.trim()}` : ""}`
+                        : undefined
+                    }
+                  >
+                    {correcting ? "Asking Qloo…" : "Approve revised Qloo lookup"}
+                  </button>
+                </div>
+                {correctionInput.trim() && guidanceFor(correctionInput) && (
+                  <p className="mem-note">{guidanceFor(correctionInput)}</p>
+                )}
+                {correcting && (
+                  <p className="mem-note" role="status">
+                    Resolving the revised anchor, then asking Qloo Insights…
+                  </p>
+                )}
+                {correctionError && (
+                  <div className="mem-error" role="alert">
+                    <p className="mem-empty-title">{FRIENDLY[correctionError.code] ?? "Revised lookup failed."}</p>
+                    <p className="mem-meta">
+                      {correctionError.message} ({correctionError.code}) The earlier result above is unchanged.
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
+          </section>
         </>
       )}
     </div>
