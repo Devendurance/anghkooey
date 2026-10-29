@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { call, errorMessage, factText, shortBlob } from "@/lib/app-client";
+import { MultiTaste } from "@/components/app/MultiTaste";
 import {
   anchorLooksNamed,
   buildTasteEvidence,
@@ -14,7 +15,7 @@ import {
 
 type Choice = { name: string; entity_id: string; kind: string };
 
-type Candidate = {
+export type Candidate = {
   name: string;
   entity_id: string;
   kind: string;
@@ -76,7 +77,7 @@ const FRIENDLY: Record<string, string> = {
 
 /** Venue card: real Qloo photo when supplied (entity-matched server-side),
  * branded no-photo state otherwise. Never substitutes an unrelated photo. */
-function TasteCard({ c }: { c: Candidate }) {
+export function TasteCard({ c }: { c: Candidate }) {
   const [imgFailed, setImgFailed] = useState(false);
   const ev = c.evidence ?? null;
   const showImg = !!c.imageUrl && !imgFailed;
@@ -731,6 +732,7 @@ export function Taste() {
           </section>
         </>
       )}
+      <MultiTaste />
     </div>
   );
 }

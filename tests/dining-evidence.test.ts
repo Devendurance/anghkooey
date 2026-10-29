@@ -67,6 +67,7 @@ describe("Qloo evidence enrichment (synthetic upstream)", () => {
       tags: null,
       affinity: null,
       matchedAnchorId: null,
+      matchedAnchorIds: null,
       address: null,
       description: null,
     });
@@ -172,10 +173,11 @@ describe("dining prompt presentation (synthetic evidence)", () => {
               tags: ["Sushi", "Elegant"],
               affinity: 0.81,
               matchedAnchorId: "SYNTH-E-1",
+              matchedAnchorIds: ["SYNTH-E-1"],
               address: "1 Synthetic St, Lagos",
               description: "A synthetic sushi counter.",
             }
-          : { tags: null, affinity: null, matchedAnchorId: null, address: null, description: null },
+          : { tags: null, affinity: null, matchedAnchorId: null, matchedAnchorIds: null, address: null, description: null },
       },
     ];
     return buildDiningMessages({ ...RICH_RESULT, userText: "Yes", memories: [], candidates }).map(

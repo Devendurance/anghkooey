@@ -46,6 +46,8 @@ export type QlooCandidate = {
     affinity: number | null;
     /** Interest-signal entity this candidate traces to (proves the anchor link). */
     matchedAnchorId: string | null;
+    /** All interest-signal entities Qloo attributes to this candidate (multi-anchor). Null when Qloo omits them. */
+    matchedAnchorIds: string[] | null;
     /** Venue address string as Qloo lists it. */
     address: string | null;
     /** Qloo's own short/overall description, capped. */
@@ -272,6 +274,20 @@ function affinityOf(e: Record<string, unknown>): number | null {
   return typeof a === "number" && Number.isFinite(a) ? a : null;
 }
 
+function matchedAnchorIdsOf(e: Record<string, unknown>): string[] | null {
+  const q = e.query as Record<string, unknown> | undefined;
+  const x = q?.explainability as Record<string, unknown> | undefined;
+  const sigs = x?.["signal.interests.entities"];
+  if (!Array.isArray(sigs)) return null;
+  const ids: string[] = [];
+  for (const s of sigs) {
+    const id = (s as Record<string, unknown> | null)?.entity_id;
+    if (typeof id === "string" && id && !ids.includes(id)) ids.push(id);
+    if (ids.length >= 3) break;
+  }
+  return ids.length > 0 ? ids : null;
+}
+
 function matchedAnchorOf(e: Record<string, unknown>): string | null {
   const q = e.query as Record<string, unknown> | undefined;
   const x = q?.explainability as Record<string, unknown> | undefined;
@@ -305,19 +321,35 @@ function placeOf(e: Record<string, unknown>): string | null {
   return null;
 }
 
-/** Real place candidates for a resolved Qloo entity. City narrows location only when supplied. */
+/** Real place candidates for confirmed Qloo entities. Accepts one entity ID
+ * (existing single-anchor callers unchanged) or 2–3 IDs for one combined
+ * multi-anchor Insights request: Qloo supports comma-separated entity IDs in
+ * `signal.interests.entities`, and a single request keeps ranking joint.
+ * Every ID is format-gated here, but callers must still revalidate IDs against
+ * a fresh Search resolution first — this gate is a backstop only. */
 export async function placeInsights(
-  entityId: string,
+  entityId: string | string[],
   opts?: { city?: string; take?: number }
 ): Promise<{ ok: true; candidates: QlooCandidate[] } | { ok: false; failure: QlooFailure }> {
-  // Insights accepts ONLY a confirmed Qloo entity ID: it must arrive here
-  // from a live resolution (or a user-confirmed choice from one), never from
-  // an unexamined search hit or caller invention. Format is a backstop only.
-  const id = entityId.trim();
-  if (!/^[0-9A-Za-z-]{8,64}$/.test(id) || !/[0-9]/.test(id)) {
+  // Insights accepts ONLY confirmed Qloo entity IDs: they must arrive here
+  // from a live resolution (or user-confirmed choices from one), never from
+  // unexamined search hits or caller invention. Format is a backstop only.
+  const rawIds = (Array.isArray(entityId) ? entityId : [entityId]).map((s) => String(s).trim());
+  const ids: string[] = [];
+  for (const id of rawIds) {
+    if (!id || ids.includes(id)) continue;
+    if (!/^[0-9A-Za-z-]{8,64}$/.test(id) || !/[0-9]/.test(id)) {
+      return {
+        ok: false,
+        failure: { status: "invalid_input", http: 400, message: "A confirmed Qloo entity is required for Insights.", upstream: null },
+      };
+    }
+    ids.push(id);
+  }
+  if (ids.length < 1 || ids.length > 3) {
     return {
       ok: false,
-      failure: { status: "invalid_input", http: 400, message: "A confirmed Qloo entity is required for Insights.", upstream: null },
+      failure: { status: "invalid_input", http: 400, message: "Insights takes 1 to 3 confirmed Qloo entities.", upstream: null },
     };
   }
   const take = Math.min(Math.max(opts?.take ?? 3, 1), 5);
@@ -330,7 +362,7 @@ export async function placeInsights(
   }
   let path =
     `/v2/insights?filter.type=urn:entity:place` +
-    `&signal.interests.entities=${encodeURIComponent(entityId)}` +
+    `&signal.interests.entities=${encodeURIComponent(ids.join(","))}` +
     `&feature.explainability=true` +
     `&take=${take}`;
   if (city) path += `&filter.location.query=${encodeURIComponent(city)}`;
@@ -359,6 +391,7 @@ export async function placeInsights(
         tags: tagsOf(e),
         affinity: affinityOf(e),
         matchedAnchorId: matchedAnchorOf(e),
+        matchedAnchorIds: matchedAnchorIdsOf(e),
         address: addressOf(e),
         description: descriptionOf(e),
       },

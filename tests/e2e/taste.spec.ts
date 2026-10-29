@@ -285,6 +285,107 @@ test("failed revised lookup keeps the before result", async ({ page }) => {
   await expect(page.getByLabel("Correction comparison")).toBeHidden();
 });
 
+test("combined anchors resolve, confirm, then discover jointly", async ({ page }) => {
+  const resolvePayload = {
+    ok: true,
+    stage: "multi_resolve",
+    city: "Lagos",
+    anchors: [
+      {
+        anchor: "Nobu Restaurant",
+        outcome: "resolved",
+        resolved: { name: "Nobu Restaurant", entity_id: "QLOO-BEFORE-1", kind: "restaurant" },
+        searchTotal: 20,
+      },
+      {
+        anchor: "Terra",
+        outcome: "choices",
+        candidates: [
+          { name: "Terra Kulture", entity_id: "QLOO-TK-1", kind: "place" },
+          { name: "Terra Madre", entity_id: "QLOO-TM-2", kind: "restaurant" },
+        ],
+        searchTotal: 2,
+      },
+    ],
+  };
+  const combinedPayload = {
+    ok: true,
+    stage: "multi_candidates",
+    city: "Lagos",
+    anchors: ["Nobu Restaurant", "Terra"],
+    resolved: [
+      { name: "Nobu Restaurant", entity_id: "QLOO-BEFORE-1", kind: "restaurant" },
+      { name: "Terra Kulture", entity_id: "QLOO-TK-1", kind: "place" },
+    ],
+    candidates: [
+      { name: "Joint One", entity_id: "JOINT-A", kind: "place", place: "Lagos", explanation: null },
+      { name: "Joint Two", entity_id: "JOINT-B", kind: "place", place: null, explanation: null },
+    ],
+    evidence: { anchorIds: ["QLOO-BEFORE-1", "QLOO-TK-1"], candidateIds: ["JOINT-A", "JOINT-B"], city: "Lagos" },
+  };
+  let insightsCalls = 0;
+  await page.route("**/api/tasteproof**", (route) => {
+    const body = JSON.parse(route.request().postData() ?? "{}") as { entityIds?: string[] };
+    if (body.entityIds) {
+      insightsCalls += 1;
+      return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(combinedPayload) });
+    }
+    return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(resolvePayload) });
+  });
+  await page.goto("/taste");
+  await page.getByRole("button", { name: "Add another anchor" }).click();
+  await page.locator("#multi-anchor-1").fill("Terra");
+  await page.getByRole("button", { name: "Resolve anchors" }).click();
+  await expect(page.getByText(/Qloo resolved.*Nobu Restaurant/i).first()).toBeVisible({ timeout: 15000 });
+  await expect(page.getByText(/found several matches/i).first()).toBeVisible({ timeout: 15000 });
+  // No combined Insights before every entity is approved.
+  expect(insightsCalls).toBe(0);
+  await expect(page.getByLabel("Combined approval summary")).toBeHidden();
+  await page.getByRole("button", { name: "Confirm Nobu Restaurant for anchor 1" }).click();
+  await page.getByRole("button", { name: "Confirm Terra Kulture for anchor 2" }).click();
+  await expect(page.getByLabel("Combined approval summary")).toBeVisible({ timeout: 15000 });
+  await page.getByRole("button", { name: "Approve combined discovery" }).click();
+  await expect(page.getByText(/Joint discovery:/).first()).toBeVisible({ timeout: 15000 });
+  expect(insightsCalls).toBe(1);
+  await expect(page.getByText("Joint One").first()).toBeVisible();
+  await expect(page.getByText("Joint Two").first()).toBeVisible();
+  await page.screenshot({ path: "test-artifacts/taste-multi-combined.png" });
+});
+
+test("stale combined selection fails honestly without Insights", async ({ page }) => {
+  const resolvePayload = {
+    ok: true,
+    stage: "multi_resolve",
+    city: "Lagos",
+    anchors: [
+      {
+        anchor: "Nobu Restaurant",
+        outcome: "resolved",
+        resolved: { name: "Nobu Restaurant", entity_id: "QLOO-BEFORE-1", kind: "restaurant" },
+        searchTotal: 20,
+      },
+    ],
+  };
+  await page.route("**/api/tasteproof**", (route) => {
+    const body = JSON.parse(route.request().postData() ?? "{}") as { entityIds?: string[] };
+    if (body.entityIds) {
+      return route.fulfill({
+        status: 409,
+        contentType: "application/json",
+        body: JSON.stringify({ ok: false, error: { code: "stale_selection", message: "That selection is stale." } }),
+      });
+    }
+    return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(resolvePayload) });
+  });
+  await page.goto("/taste");
+  await page.getByRole("button", { name: "Resolve anchors" }).click();
+  await expect(page.getByText(/Qloo resolved.*Nobu Restaurant/i).first()).toBeVisible({ timeout: 15000 });
+  await page.getByRole("button", { name: "Confirm Nobu Restaurant for anchor 1" }).click();
+  await page.getByRole("button", { name: "Approve combined discovery" }).click();
+  await expect(page.getByText(/went stale/i).first()).toBeVisible({ timeout: 15000 });
+  await expect(page.getByText(/Joint discovery:/)).toBeHidden();
+});
+
 test.afterAll(() => {
   expect(consoleErrors, `unexpected browser errors: ${consoleErrors.join(" | ").slice(0, 500)}`).toEqual([]);
 });
