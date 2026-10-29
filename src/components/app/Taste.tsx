@@ -26,6 +26,7 @@ export type Candidate = {
     tags: string[] | null;
     affinity: number | null;
     matchedAnchorId: string | null;
+    matchedAnchorIds?: string[] | null;
     address: string | null;
     description: string | null;
   } | null;

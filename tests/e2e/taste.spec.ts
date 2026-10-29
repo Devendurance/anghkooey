@@ -318,16 +318,31 @@ test("combined anchors resolve, confirm, then discover jointly", async ({ page }
       { name: "Terra Kulture", entity_id: "QLOO-TK-1", kind: "place" },
     ],
     candidates: [
-      { name: "Joint One", entity_id: "JOINT-A", kind: "place", place: "Lagos", explanation: null },
-      { name: "Joint Two", entity_id: "JOINT-B", kind: "place", place: null, explanation: null },
+      { name: "Joint One", entity_id: "JOINT-A", kind: "place", place: "Lagos", explanation: null, evidence: { tags: null, affinity: 0.72, matchedAnchorId: "QLOO-BEFORE-1", matchedAnchorIds: ["QLOO-BEFORE-1", "QLOO-TK-1"], address: null, description: null } },
+      { name: "Joint Two", entity_id: "JOINT-B", kind: "place", place: null, explanation: null, evidence: { tags: null, affinity: null, matchedAnchorId: null, matchedAnchorIds: null, address: null, description: null } },
     ],
     evidence: { anchorIds: ["QLOO-BEFORE-1", "QLOO-TK-1"], candidateIds: ["JOINT-A", "JOINT-B"], city: "Lagos" },
   };
+  const baselinePayload = {
+    ok: true,
+    stage: "multi_candidates",
+    city: "Lagos",
+    anchors: ["Nobu Restaurant"],
+    resolved: [{ name: "Nobu Restaurant", entity_id: "QLOO-BEFORE-1", kind: "restaurant" }],
+    candidates: [
+      { name: "Talindo Alone", entity_id: "BASE-A", kind: "place", place: "Lagos", explanation: null },
+      { name: "Joint One", entity_id: "JOINT-A", kind: "place", place: "Lagos", explanation: null },
+    ],
+    evidence: { anchorIds: ["QLOO-BEFORE-1"], candidateIds: ["BASE-A", "JOINT-A"], city: "Lagos" },
+  };
   let insightsCalls = 0;
   await page.route("**/api/tasteproof**", (route) => {
-    const body = JSON.parse(route.request().postData() ?? "{}") as { entityIds?: string[] };
+    const body = JSON.parse(route.request().postData() ?? "{}") as { entityIds?: string[]; anchors?: string[] };
     if (body.entityIds) {
       insightsCalls += 1;
+      if ((body.anchors ?? []).length <= 1) {
+        return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(baselinePayload) });
+      }
       return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(combinedPayload) });
     }
     return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(resolvePayload) });
@@ -349,6 +364,15 @@ test("combined anchors resolve, confirm, then discover jointly", async ({ page }
   expect(insightsCalls).toBe(1);
   await expect(page.getByText("Joint One").first()).toBeVisible();
   await expect(page.getByText("Joint Two").first()).toBeVisible();
+  await expect(page.getByText(/Which anchors Qloo links/i).first()).toBeVisible();
+  await expect(page.getByText(/Nobu Restaurant, Terra Kulture/i).first()).toBeVisible();
+  await expect(page.getByText(/Contribution details unavailable/i).first()).toBeVisible();
+  await expect(page.getByText(/What actually ran/i).first()).toBeVisible();
+  await page.getByRole("button", { name: "Compare with Nobu Restaurant alone" }).click();
+  await expect(page.getByText(/alone vs all 2 anchors combined/i).first()).toBeVisible({ timeout: 15000 });
+  expect(insightsCalls).toBe(2);
+  await expect(page.getByText(/Added by the combined lookup: Joint Two/i).first()).toBeVisible();
+  await expect(page.getByText(/Only in the single-anchor baseline: Talindo Alone/i).first()).toBeVisible();
   await page.screenshot({ path: "test-artifacts/taste-multi-combined.png" });
 });
 
