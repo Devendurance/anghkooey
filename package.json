@@ -18,7 +18,10 @@
     "photon:readiness": "tsx scripts/photon-readiness.ts",
     "channel:evidence": "tsx scripts/channel-evidence.ts",
     "diagnose:hotel": "tsx scripts/diagnose-hotel-url.ts",
-    "identity:diagnose": "tsx scripts/identity-diagnose.ts"
+    "identity:diagnose": "tsx scripts/identity-diagnose.ts",
+    "test:qa": "tsx scripts/qa-preflight.ts && vitest run",
+    "qa:approve": "tsx scripts/qa-preflight.ts --approve",
+    "test:e2e": "LD_LIBRARY_PATH=$HOME/.playwright-deps/libs/usr/lib/x86_64-linux-gnu playwright test"
   },
   "dependencies": {
     "@gsap/react": "^2.1.2",
@@ -37,6 +40,7 @@
     "zod": "^4.6.5"
   },
   "devDependencies": {
+    "@playwright/test": "^1.64.1",
     "@tailwindcss/turbopack": "^4",
     "@types/node": "^20",
     "@types/react": "^19",

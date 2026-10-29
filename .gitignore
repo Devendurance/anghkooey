@@ -48,3 +48,7 @@ logs/
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# qa browser artifacts + local qa allowlist (never commit)
+test-artifacts/
+.qa-allowlist

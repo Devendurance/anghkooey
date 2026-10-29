@@ -11,7 +11,7 @@ export type QlooFailureStatus =
   | "no_match"
   | "invalid_input";
 
-export type QlooFailure = { status: QlooFailureStatus; http: number; message: string };
+export type QlooFailure = { status: QlooFailureStatus; http: number; message: string; upstream: number | null };
 
 export type QlooEntity = { name: string; entity_id: string; kind: string };
 
@@ -40,7 +40,7 @@ async function qlooGet(
   if (!cfg) {
     return {
       ok: false,
-      failure: { status: "not_configured", http: 503, message: "Qloo dining lookup is not configured on this server." },
+      failure: { status: "not_configured", http: 503, message: "Qloo dining lookup is not configured on this server.", upstream: null },
     };
   }
   let res: Response;
@@ -52,25 +52,25 @@ async function qlooGet(
   } catch {
     return {
       ok: false,
-      failure: { status: "unavailable", http: 503, message: "Qloo is unreachable right now. Try again shortly." },
+      failure: { status: "unavailable", http: 503, message: "Qloo is unreachable right now. Try again shortly.", upstream: null },
     };
   }
   if (res.status === 401 || res.status === 403) {
     return {
       ok: false,
-      failure: { status: "unauthorized", http: 502, message: "Qloo rejected this server's credentials." },
+      failure: { status: "unauthorized", http: 502, message: "Qloo rejected this server's credentials.", upstream: res.status },
     };
   }
   if (res.status === 429) {
     return {
       ok: false,
-      failure: { status: "rate_limited", http: 503, message: "Qloo is rate-limiting taste lookups. Slow down and retry." },
+      failure: { status: "rate_limited", http: 503, message: "Qloo is rate-limiting taste lookups. Slow down and retry.", upstream: res.status },
     };
   }
   if (!res.ok) {
     return {
       ok: false,
-      failure: { status: "unavailable", http: 503, message: `Qloo returned an unexpected response (${res.status}).` },
+      failure: { status: "unavailable", http: 503, message: `Qloo returned an unexpected response (${res.status}).`, upstream: res.status },
     };
   }
   try {
@@ -78,7 +78,7 @@ async function qlooGet(
   } catch {
     return {
       ok: false,
-      failure: { status: "unavailable", http: 503, message: "Qloo returned an unreadable response." },
+      failure: { status: "unavailable", http: 503, message: "Qloo returned an unreadable response.", upstream: res.status },
     };
   }
 }
@@ -91,7 +91,7 @@ export async function searchAnchor(
   if (q.length < 2 || q.length > 80) {
     return {
       ok: false,
-      failure: { status: "invalid_input", http: 400, message: "Give a named place, artist or film (2 to 80 characters)." },
+      failure: { status: "invalid_input", http: 400, message: "Give a named place, artist or film (2 to 80 characters).", upstream: null },
     };
   }
   const r = await qlooGet(`/search?query=${encodeURIComponent(q)}`);
@@ -101,7 +101,7 @@ export async function searchAnchor(
   if (!first || typeof first.entity_id !== "string" || typeof first.name !== "string") {
     return {
       ok: false,
-      failure: { status: "no_match", http: 404, message: `Qloo has no match for "${q}". Try a specific named place.` },
+      failure: { status: "no_match", http: 404, message: `Qloo has no match for "${q}". Try a specific named place.`, upstream: 200 },
     };
   }
   return {
@@ -146,7 +146,7 @@ export async function placeInsights(
   if (city.length > 80) {
     return {
       ok: false,
-      failure: { status: "invalid_input", http: 400, message: "City names stay under 80 characters." },
+      failure: { status: "invalid_input", http: 400, message: "City names stay under 80 characters.", upstream: null },
     };
   }
   let path =
@@ -161,7 +161,7 @@ export async function placeInsights(
   if (!list) {
     return {
       ok: false,
-      failure: { status: "unavailable", http: 503, message: "Qloo returned an unexpected insights shape." },
+      failure: { status: "unavailable", http: 503, message: "Qloo returned an unexpected insights shape.", upstream: 200 },
     };
   }
   const candidates: QlooCandidate[] = [];
