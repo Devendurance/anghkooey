@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { placeInsights } from "@/server/qloo";
-import { buildDiningMessages } from "@/server/prompts";
+import { buildDiningMessages, buildGroundedMessages } from "@/server/prompts";
 
 // All fixtures SYNTHETIC. Fetch is mocked: no network, no database.
 
@@ -89,6 +89,74 @@ describe("Qloo evidence enrichment (synthetic upstream)", () => {
   });
 });
 
+describe("Qloo image parsing (synthetic upstream)", () => {
+  const entityWith = (image: unknown) => ({
+    results: {
+      entities: [
+        {
+          name: "Synthetic One",
+          entity_id: "SYNTH-C-1",
+          subtype: "place",
+          properties: { image },
+        },
+      ],
+    },
+  });
+
+  it("accepts a matching https Qloo image URL", async () => {
+    mockInsightsOnce(
+      entityWith({ url: "https://images.qloo.com/i/SYNTH-C-1-420x-auto.jpg" })
+    );
+    const r = await placeInsights("SYNTH-E-1");
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.candidates[0].imageUrl).toBe("https://images.qloo.com/i/SYNTH-C-1-420x-auto.jpg");
+  });
+
+  it("rejects non-https, foreign-host, and mismatched-entity URLs", async () => {
+    for (const bad of [
+      { url: "http://images.qloo.com/i/SYNTH-C-1-420x-auto.jpg" },
+      { url: "https://evil.example.com/i/SYNTH-C-1.jpg" },
+      { url: "https://images.qloo.com/i/OTHER-ENTITY-9-420x-auto.jpg" },
+      { url: "not a url" },
+    ]) {
+      mockInsightsOnce(entityWith(bad));
+      const r = await placeInsights("SYNTH-E-1");
+      expect(r.ok).toBe(true);
+      if (!r.ok) continue;
+      expect(r.candidates[0].imageUrl).toBeNull();
+    }
+  });
+
+  it("yields null when Qloo supplies no image", async () => {
+    mockInsightsOnce(entityWith(undefined));
+    const r = await placeInsights("SYNTH-E-1");
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.candidates[0].imageUrl).toBeNull();
+  });
+});
+
+describe("concierge copy rules (synthetic evidence)", () => {
+  it("never claims missing stored preferences", () => {
+    const [memBlock] = buildGroundedMessages({
+      userText: "Find dining like Nobu in Lagos",
+      memories: [],
+    }).filter((m) => m.role === "system" && m.content.includes("saved preferences"));
+    expect(memBlock.content).toContain("I didn't find any relevant saved preferences");
+    expect(memBlock.content).not.toMatch(/I don't have stored preferences/);
+  });
+
+  it("forbids offering Qloo weighting and treats reservation tags as descriptions", () => {
+    const joined = buildDiningMessages({ ...RICH_RESULT, userText: "Yes", memories: [], candidates: [] })
+      .map((m) => m.content)
+      .join("\n");
+    expect(joined).toMatch(/weighting.*does not exist|does not exist.*weighting/i);
+    expect(joined).toMatch(/third-party.*reservation|reservation.*third-party/i);
+    expect(joined).toContain("/taste");
+  });
+});
+
 describe("dining prompt presentation (synthetic evidence)", () => {
   function messagesFor(described: boolean) {
     const candidates = [
@@ -98,6 +166,7 @@ describe("dining prompt presentation (synthetic evidence)", () => {
         kind: "place",
         place: null,
         explanation: null,
+        imageUrl: null,
         evidence: described
           ? {
               tags: ["Sushi", "Elegant"],

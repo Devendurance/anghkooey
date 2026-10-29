@@ -21,6 +21,11 @@ export type QlooCandidate = {
   kind: string;
   place: string | null;
   explanation: string | null;
+  /** Venue photo as listed by Qloo (properties.image.url). Null unless the
+   * URL is https, served from Qloo's image host, and names this venue's own
+   * entity — so a photo can never attach to the wrong venue. No license is
+   * conveyed upstream; UI must credit Qloo as the photo source. */
+  imageUrl: string | null;
   /** Real Qloo signal, all optional and null when Qloo omits them. Never invented. */
   evidence: {
     /** Qloo venue tags (names only, deduplicated, capped). */
@@ -138,6 +143,26 @@ function explanationOf(e: Record<string, unknown>): string | null {
   return null;
 }
 
+const QLOO_IMAGE_HOST = "images.qloo.com";
+
+function imageUrlOf(e: Record<string, unknown>, entityId: string): string | null {
+  const props = e.properties as Record<string, unknown> | undefined;
+  const img = props?.image;
+  const url = typeof img === "string" ? img : (img as Record<string, unknown> | null)?.url;
+  if (typeof url !== "string" || !url) return null;
+  let parsed: URL;
+  try {
+    parsed = new URL(url.trim());
+  } catch {
+    return null;
+  }
+  if (parsed.protocol !== "https:" || parsed.hostname !== QLOO_IMAGE_HOST) return null;
+  // The venue's own entity ID is embedded in Qloo's image path: a photo
+  // from another venue can never pass this check.
+  if (!parsed.pathname.includes(entityId) || url.length > 300) return null;
+  return parsed.toString();
+}
+
 function tagsOf(e: Record<string, unknown>): string[] | null {
   const raw = e.tags;
   if (!Array.isArray(raw)) return null;
@@ -232,6 +257,7 @@ export async function placeInsights(
       kind: String(e.subtype || e.type || "place"),
       place: placeOf(e),
       explanation: explanationOf(e),
+      imageUrl: imageUrlOf(e, e.entity_id),
       evidence: {
         tags: tagsOf(e),
         affinity: affinityOf(e),

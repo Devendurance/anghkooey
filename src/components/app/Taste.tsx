@@ -18,6 +18,14 @@ type Candidate = {
   kind: string;
   place: string | null;
   explanation: string | null;
+  imageUrl?: string | null;
+  evidence?: {
+    tags: string[] | null;
+    affinity: number | null;
+    matchedAnchorId: string | null;
+    address: string | null;
+    description: string | null;
+  } | null;
 };
 
 type Result = {
@@ -61,6 +69,56 @@ const FRIENDLY: Record<string, string> = {
   qloo_unauthorized: "This server's Qloo credentials were rejected.",
   qloo_unavailable: "Qloo is unreachable right now.",
 };
+
+/** Venue card: real Qloo photo when supplied (entity-matched server-side),
+ * branded no-photo state otherwise. Never substitutes an unrelated photo. */
+function TasteCard({ c }: { c: Candidate }) {
+  const [imgFailed, setImgFailed] = useState(false);
+  const ev = c.evidence ?? null;
+  const showImg = !!c.imageUrl && !imgFailed;
+  return (
+    <article className="mem-card taste-card">
+      {showImg ? (
+        <img
+          className="taste-photo"
+          src={c.imageUrl as string}
+          alt={`Photo of ${c.name} via Qloo`}
+          loading="lazy"
+          onError={() => setImgFailed(true)}
+        />
+      ) : (
+        <div className="taste-noimg" aria-hidden="true">
+          <span>{c.name.slice(0, 1)}</span>
+        </div>
+      )}
+      <div className="mem-card-top">
+        <h2 className="mem-h">{c.name}</h2>
+      </div>
+      <p className="mem-meta">
+        {c.kind}
+        {ev?.address ? ` · ${ev.address}` : c.place ? ` · ${c.place}` : ""} · {shortBlob(c.entity_id)}
+      </p>
+      {ev?.description && <p className="mem-fact">{ev.description}</p>}
+      {ev?.tags && (
+        <p className="taste-tags">
+          {ev.tags.slice(0, 6).map((t) => (
+            <span key={t} className="mem-badge">
+              {t}
+            </span>
+          ))}
+        </p>
+      )}
+      {typeof ev?.affinity === "number" && (
+        <p className="mem-meta">
+          Qloo affinity {ev.affinity.toFixed(2)} — Qloo&apos;s ranking signal, not a match percentage.
+        </p>
+      )}
+      <p className="mem-meta">
+        Qloo discovery{c.imageUrl ? " · Photo: Qloo" : ""} · Availability, prices and bookings are not verified.
+      </p>
+    </article>
+  );
+}
 
 export function Taste() {
   const [anchor, setAnchor] = useState("Nobu Restaurant");
@@ -172,7 +230,7 @@ export function Taste() {
 
   return (
     <div className="mem-inner">
-      <p className="mem-eyebrow">TasteProof · Slice 3</p>
+      <p className="mem-eyebrow">TasteProof · Verified Qloo discovery</p>
       <h1 className="mem-h">One anchor, real cultural signal</h1>
       <p className="mem-lead">
         Supply one named cultural anchor, or pull one from your saved memories. Anghkooey
@@ -405,19 +463,7 @@ export function Taste() {
           </section>
           <div className="mem-grid">
             {phase.result.candidates.map((c) => (
-              <article key={c.entity_id} className="mem-card">
-                <div className="mem-card-top">
-                  <h2 className="mem-h">{c.name}</h2>
-                  <p className="mem-meta">
-                    {c.kind}
-                    {c.place ? ` · ${c.place}` : ""} · {shortBlob(c.entity_id)}
-                  </p>
-                </div>
-                <p className="mem-fact">
-                  {c.explanation ?? "Qloo explanation: Not available."}
-                </p>
-                <p className="mem-meta">Returned by Qloo Insights. Availability, prices and bookings are not verified.</p>
-              </article>
+              <TasteCard key={c.entity_id} c={c} />
             ))}
           </div>
           <section aria-labelledby="taste-correction-title" className="mem-card">
@@ -466,11 +512,18 @@ export function Taste() {
                           — no longer returned for the revised anchor. Qloo gave no reason beyond the new ranking.
                         </p>
                       )}
-                      {correction.after.candidates.map((c) => (
-                        <p key={c.entity_id} className="mem-meta">
-                          Why {c.name}? {c.explanation ?? "Qloo explanation: Not available."}
-                        </p>
-                      ))}
+                      {correction.after.candidates.map((c) => {
+                        const ev = c.evidence;
+                        const note =
+                          ev?.description ??
+                          (ev?.tags ? `Qloo tags: ${ev.tags.slice(0, 4).join(", ")}` : null) ??
+                          "Listed by Qloo without descriptive notes.";
+                        return (
+                          <p key={c.entity_id} className="mem-meta">
+                            Why {c.name}? {note}
+                          </p>
+                        );
+                      })}
                     </div>
                   )}
                   <p className="mem-meta">Session only: your saved memories are unchanged.</p>
