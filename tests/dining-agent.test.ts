@@ -9,6 +9,7 @@ import { handleMessage } from "@/server/orchestrator";
 import {
   buildDiningChoices,
   buildDiningClarify,
+  buildDiningConfirm,
   buildDiningProposal,
   detectDiningIntent,
   executeDiningTurn,
@@ -16,6 +17,7 @@ import {
   isAffirmative,
   latestDiningProposal,
   pendingDiningChoices,
+  pendingDiningConfirm,
   planDiningTurn,
   selectDiningChoice,
 } from "@/server/dining";
@@ -198,9 +200,10 @@ describe("dining orchestrator (mocked provider + composer)", () => {
     expect(mockChat).not.toHaveBeenCalled();
   });
 
-  it("approved turn runs live Qloo and grounds the answer in real candidates", async () => {
+  it("approved turn resolves only and asks for entity confirmation (no Insights)", async () => {
     storeOk(1);
     const fetchFn = mockQlooOk();
+    let composed = false;
     const done = await executeDiningTurn(
       { kind: "approved", anchor: "Nobu", city: "Lagos" },
       {
@@ -208,6 +211,52 @@ describe("dining orchestrator (mocked provider + composer)", () => {
         userText: "Yes, please",
         memories: [],
         history: PROPOSAL_HISTORY,
+        recallStatus: "ok",
+        compose: async () => {
+          composed = true;
+          return "unreachable";
+        },
+      }
+    );
+    expect(done.evidence).toBeNull();
+    expect(done.message).toContain("Qloo resolved");
+    expect(done.message).toContain("SYNTH-E-1");
+    // Exactly one Search call: Insights never runs before confirmation.
+    expect(fetchFn).toHaveBeenCalledTimes(1);
+    expect(String(fetchFn.mock.calls[0][0])).toContain("/search?");
+    expect(composed).toBe(false);
+  });
+
+  it("explicit confirmation then runs Insights for the confirmed entity", async () => {
+    storeOk(1);
+    const fetchFn = mockQlooOkForInsights();
+    const confirmMsg = buildDiningConfirm("Nobu", "Lagos", {
+      name: "Nobu",
+      entity_id: "SYNTH-E-1",
+      kind: "restaurant",
+    });
+    expect(pendingDiningConfirm([
+      { role: "user", text: "Yes, please" },
+      { role: "assistant", text: confirmMsg },
+    ])?.entity.entity_id).toBe("SYNTH-E-1");
+    const turn = planDiningTurn("Yes", [
+      ...PROPOSAL_HISTORY,
+      { role: "user", text: "Yes, please" },
+      { role: "assistant", text: confirmMsg },
+    ]);
+    expect(turn).toEqual({
+      kind: "approved",
+      anchor: "Nobu",
+      city: "Lagos",
+      confirmedEntityId: "SYNTH-E-1",
+    });
+    const done = await executeDiningTurn(
+      { kind: "approved", anchor: "Nobu", city: "Lagos", confirmedEntityId: "SYNTH-E-1" },
+      {
+        userId: UID,
+        userText: "Yes",
+        memories: [],
+        history: [],
         recallStatus: "ok",
         compose: echoComposer,
       }
@@ -220,11 +269,12 @@ describe("dining orchestrator (mocked provider + composer)", () => {
     });
     expect(done.message).toContain("SYNTH-C-1");
     expect(done.message).toContain("SYNTH-C-2");
-    expect(fetchFn).toHaveBeenCalledTimes(2);
+    // Insights only: no second Search.
+    expect(fetchFn).toHaveBeenCalledTimes(1);
+    expect(String(fetchFn.mock.calls[0][0])).toContain("signal.interests.entities=SYNTH-E-1");
     // Only anchor/city/entity cross to Qloo: no memory internals in URLs.
     const urls = fetchFn.mock.calls.map((c) => String(c[0])).join(" ");
     expect(urls).not.toMatch(/walrus|memory|blob/i);
-    expect(urls).toContain("Nobu");
   });
 
   it("reports no-match honestly without calling the composer", async () => {
@@ -422,6 +472,113 @@ describe("dining entity confirmation (mocked Qloo)", () => {
   it("refining during choices starts a new proposal", () => {
     const turn = planDiningTurn("Actually make it Terra Kulture", CHOICES_HISTORY);
     expect(turn).toEqual({ kind: "propose", anchor: "Terra Kulture", city: "Lagos" });
+  });
+});
+
+describe("entity confirmation gate (two-step Insights)", () => {
+  const CONFIRM_MSG = buildDiningConfirm("Nobu", "Lagos", {
+    name: "Nobu",
+    entity_id: "SYNTH-E-1",
+    kind: "restaurant",
+  });
+  const CONFIRM_HISTORY = [
+    { role: "user" as const, text: "Find dining like Nobu in Lagos" },
+    { role: "assistant" as const, text: PROPOSAL },
+    { role: "user" as const, text: "Yes, please" },
+    { role: "assistant" as const, text: CONFIRM_MSG },
+  ];
+
+  it("parses the pending confirmation with its exact entity", () => {
+    const pending = pendingDiningConfirm(CONFIRM_HISTORY);
+    expect(pending).toMatchObject({ anchor: "Nobu", city: "Lagos" });
+    expect(pending?.entity).toMatchObject({ name: "Nobu", entity_id: "SYNTH-E-1" });
+    expect(pendingDiningConfirm(PROPOSAL_HISTORY)).toBeNull();
+  });
+
+  it("bare yes confirms the pending entity — nothing else", () => {
+    expect(planDiningTurn("Yes", CONFIRM_HISTORY)).toEqual({
+      kind: "approved",
+      anchor: "Nobu",
+      city: "Lagos",
+      confirmedEntityId: "SYNTH-E-1",
+    });
+  });
+
+  it("restating the entity name confirms it", () => {
+    const turn = planDiningTurn("Nobu", CONFIRM_HISTORY);
+    expect(turn).toEqual({
+      kind: "approved",
+      anchor: "Nobu",
+      city: "Lagos",
+      confirmedEntityId: "SYNTH-E-1",
+    });
+  });
+
+  it("denial invalidates the pending confirmation", () => {
+    expect(planDiningTurn("No thanks", CONFIRM_HISTORY).kind).toBe("none");
+  });
+
+  it("unrelated questions invalidate the pending confirmation", () => {
+    expect(planDiningTurn("What's the weather in Lagos?", CONFIRM_HISTORY).kind).toBe("none");
+  });
+
+  it("changed anchor starts over instead of confirming stale", () => {
+    const turn = planDiningTurn("Actually make it Terra Kulture", CONFIRM_HISTORY);
+    expect(turn.kind).toBe("propose");
+    expect(turn).not.toHaveProperty("confirmedEntityId");
+  });
+
+  it("changed city starts over instead of confirming stale", () => {
+    const turn = planDiningTurn("Actually, make it Ikoyi", CONFIRM_HISTORY);
+    expect(turn.kind).toBe("propose");
+    expect(turn).not.toHaveProperty("confirmedEntityId");
+  });
+
+  it("a newer proposal supersedes the old confirmation", () => {
+    const history = [
+      ...CONFIRM_HISTORY,
+      { role: "user" as const, text: "Actually make it Terra Kulture" },
+      { role: "assistant" as const, text: buildDiningProposal("Terra Kulture", "Lagos") },
+    ];
+    const turn = planDiningTurn("Yes", history);
+    expect(turn).toEqual({ kind: "approved", anchor: "Terra Kulture", city: "Lagos" });
+    expect(turn).not.toHaveProperty("confirmedEntityId");
+  });
+
+  it("gibberish approval never reaches Insights", async () => {
+    storeOk(1);
+    const fetchFn = vi.fn().mockResolvedValueOnce(
+      new Response(JSON.stringify({ results: [] }), { status: 200 })
+    );
+    vi.stubGlobal("fetch", fetchFn);
+    let composed = false;
+    const done = await executeDiningTurn(
+      { kind: "approved", anchor: "xqz-not-a-place", city: "Lagos" },
+      {
+        userId: UID,
+        userText: "Yes",
+        memories: [],
+        history: [],
+        recallStatus: "ok",
+        compose: async () => {
+          composed = true;
+          return "unreachable";
+        },
+      }
+    );
+    expect(done.message).toMatch(/no match/i);
+    expect(done.evidence).toBeNull();
+    expect(fetchFn).toHaveBeenCalledTimes(1);
+    expect(String(fetchFn.mock.calls[0][0])).toContain("/search?");
+    expect(composed).toBe(false);
+  });
+
+  it("denial with a pending confirmation makes zero Qloo calls", async () => {
+    const fetchFn = mockQlooOk();
+    mockChat.mockResolvedValue("No problem.");
+    const res = await msg("No thanks");
+    expect(res.dining).toBeNull();
+    expect(fetchFn).not.toHaveBeenCalled();
   });
 });
 
