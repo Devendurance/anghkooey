@@ -9,11 +9,23 @@ export type QlooFailureStatus =
   | "rate_limited"
   | "unavailable"
   | "no_match"
+  | "ambiguous"
   | "invalid_input";
 
 export type QlooFailure = { status: QlooFailureStatus; http: number; message: string; upstream: number | null };
 
 export type QlooEntity = { name: string; entity_id: string; kind: string };
+
+/** One validated Search hit. Only entries with a real ID and name survive. */
+export type QlooSearchCandidate = { name: string; entity_id: string; kind: string };
+
+/** Outcome of trustworthy anchor resolution. Insights must only ever run
+ * on an entity from a "resolved" outcome or a user-confirmed "ambiguous"
+ * choice — never on an unexamined first result. */
+export type ResolveResult =
+  | { status: "resolved"; entity: QlooEntity; total: number }
+  | { status: "ambiguous"; candidates: QlooSearchCandidate[]; total: number }
+  | { status: "failed"; failure: QlooFailure };
 
 export type QlooCandidate = {
   name: string;
@@ -101,10 +113,10 @@ async function qlooGet(
   }
 }
 
-/** Resolve a caller-supplied named anchor (place, artist, film) to a real Qloo entity. */
-export async function searchAnchor(
+/** Resolve a caller-supplied named anchor (place, artist, film) to valid Qloo Search candidates. Structural validation only: entries without a real ID or name are dropped, duplicates merged. No type is invented or excluded. */
+export async function searchCandidates(
   query: string
-): Promise<{ ok: true; entity: QlooEntity; total: number } | { ok: false; failure: QlooFailure }> {
+): Promise<{ ok: true; candidates: QlooSearchCandidate[]; total: number } | { ok: false; failure: QlooFailure }> {
   const q = query.trim();
   if (q.length < 2 || q.length > 80) {
     return {
@@ -115,22 +127,97 @@ export async function searchAnchor(
   const r = await qlooGet(`/search?query=${encodeURIComponent(q)}`);
   if (!r.ok) return r;
   const results = Array.isArray(r.json.results) ? r.json.results : [];
-  const first = results[0] as { name?: unknown; entity_id?: unknown; subtype?: unknown; type?: unknown } | undefined;
-  if (!first || typeof first.entity_id !== "string" || typeof first.name !== "string") {
+  const seen = new Set<string>();
+  const candidates: QlooSearchCandidate[] = [];
+  for (const raw of results) {
+    const e = raw as Record<string, unknown> | null;
+    if (!e || typeof e !== "object") continue;
+    if (typeof e.entity_id !== "string" || !e.entity_id || typeof e.name !== "string") continue;
+    const name = e.name.trim();
+    if (!name || name.length > 120 || seen.has(e.entity_id)) continue;
+    seen.add(e.entity_id);
+    candidates.push({ name, entity_id: e.entity_id, kind: String(e.subtype || e.type || "entity") });
+  }
+  return { ok: true, candidates, total: results.length };
+}
+
+const ANCHOR_STOPWORDS = new Set([
+  "a", "an", "the", "and", "or", "to", "in", "on", "at", "of", "for", "with",
+  "not", "no", "de", "la", "le", "et", "und", "y",
+]);
+
+function anchorTokens(s: string): string[] {
+  return s
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter((t) => t.length > 2 && !ANCHOR_STOPWORDS.has(t));
+}
+
+/** Conservative lexical match: true only when every significant query token
+ * appears in the candidate name. Shorter official names do NOT auto-match:
+ * if several venues share the tokens, the user must pick. No scores. */
+export function isStrongAnchorMatch(query: string, name: string): boolean {
+  const q = new Set(anchorTokens(query));
+  if (q.size === 0) return false;
+  const cSet = new Set(anchorTokens(name));
+  if (cSet.size === 0) return false;
+  return [...q].every((t) => cSet.has(t));
+}
+
+function noMatchFailure(q: string): QlooFailure {
+  return {
+    status: "no_match",
+    http: 404,
+    message: `Qloo has no match for "${q.trim()}". Try a specific named place.`,
+    upstream: 200,
+  };
+}
+
+/** Trustworthy resolution: exactly one lexically strong candidate resolves;
+ * several strong candidates mean ambiguity (the caller must ask the user);
+ * anything else is an honest no-match. Never returns an unexamined hit. */
+export async function resolveAnchor(query: string): Promise<ResolveResult> {
+  const q = query.trim();
+  if (q.length < 2 || q.length > 80) {
     return {
-      ok: false,
-      failure: { status: "no_match", http: 404, message: `Qloo has no match for "${q}". Try a specific named place.`, upstream: 200 },
+      status: "failed",
+      failure: { status: "invalid_input", http: 400, message: "Give a named place, artist or film (2 to 80 characters).", upstream: null },
     };
   }
-  return {
-    ok: true,
-    entity: {
-      name: first.name,
-      entity_id: first.entity_id,
-      kind: String(first.subtype || first.type || "entity"),
-    },
-    total: results.length,
-  };
+  const c = await searchCandidates(query);
+  if (!c.ok) return { status: "failed", failure: c.failure };
+  if (c.candidates.length === 0) return { status: "failed", failure: noMatchFailure(q) };
+  const strong = c.candidates.filter((e) => isStrongAnchorMatch(q, e.name));
+  if (strong.length === 1) {
+    const e = strong[0];
+    return { status: "resolved", entity: { name: e.name, entity_id: e.entity_id, kind: e.kind }, total: c.total };
+  }
+  if (strong.length > 1) {
+    return { status: "ambiguous", candidates: strong.slice(0, 4), total: c.total };
+  }
+  return { status: "failed", failure: noMatchFailure(q) };
+}
+
+/** Legacy single-entity lookup kept for existing callers. Safe by construction:
+ * only an unambiguous strong match resolves; ambiguity surfaces as an
+ * explicit failure the caller must handle with candidate choices. */
+export async function searchAnchor(
+  query: string
+): Promise<{ ok: true; entity: QlooEntity; total: number } | { ok: false; failure: QlooFailure }> {
+  const r = await resolveAnchor(query);
+  if (r.status === "resolved") return { ok: true, entity: r.entity, total: r.total };
+  if (r.status === "ambiguous") {
+    return {
+      ok: false,
+      failure: {
+        status: "ambiguous",
+        http: 409,
+        message: `Qloo matches several places for "${query.trim()}": ${r.candidates.map((c) => c.name).join(", ")}. Pick one to continue.`,
+        upstream: null,
+      },
+    };
+  }
+  return { ok: false, failure: r.failure };
 }
 
 function explanationOf(e: Record<string, unknown>): string | null {
@@ -223,6 +310,16 @@ export async function placeInsights(
   entityId: string,
   opts?: { city?: string; take?: number }
 ): Promise<{ ok: true; candidates: QlooCandidate[] } | { ok: false; failure: QlooFailure }> {
+  // Insights accepts ONLY a confirmed Qloo entity ID: it must arrive here
+  // from a live resolution (or a user-confirmed choice from one), never from
+  // an unexamined search hit or caller invention. Format is a backstop only.
+  const id = entityId.trim();
+  if (!/^[0-9A-Za-z-]{8,64}$/.test(id) || !/[0-9]/.test(id)) {
+    return {
+      ok: false,
+      failure: { status: "invalid_input", http: 400, message: "A confirmed Qloo entity is required for Insights.", upstream: null },
+    };
+  }
   const take = Math.min(Math.max(opts?.take ?? 3, 1), 5);
   const city = opts?.city?.trim() || "";
   if (city.length > 80) {

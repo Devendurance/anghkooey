@@ -1,4 +1,4 @@
-import { placeInsights, searchAnchor, type QlooCandidate } from "./qloo";
+import { placeInsights, resolveAnchor, type QlooCandidate } from "./qloo";
 import { buildDiningMessages } from "./prompts";
 import type { MemoryHit, RecallStatus } from "./prompts";
 import { checkRateLimitStrict } from "./rate-limit";
@@ -13,7 +13,10 @@ export type DiningTurn =
   | { kind: "none" }
   | { kind: "propose"; anchor: string; city: string }
   | { kind: "clarify"; missing: "anchor" | "city" | "both" }
-  | { kind: "approved"; anchor: string; city: string };
+  | { kind: "choose"; anchor: string; city: string; choices: DiningChoice[] }
+  | { kind: "approved"; anchor: string; city: string; confirmedEntityId?: string };
+
+export type DiningChoice = { name: string; entity_id: string; kind: string };
 
 export type DiningEvidence = {
   anchor: string;
@@ -28,7 +31,8 @@ export type DiningLookup =
       resolved: { name: string; entity_id: string; kind: string };
       candidates: QlooCandidate[];
     }
-  | { ok: false; code: "rate_limited" | "rate_limit_unavailable" | "no_match" | "unavailable"; message: string };
+  | { ok: false; code: "rate_limited" | "rate_limit_unavailable" | "no_match" | "unavailable"; message: string }
+  | { ok: false; code: "ambiguous"; message: string; choices: DiningChoice[] };
 
 const DINING_RE =
   /\b(dining|dinner|lunch|restaurant|restaurants|food|cuisine|eat|eatery|places?\s+to\s+eat)\b/i;
@@ -189,6 +193,34 @@ export function planDiningTurn(
   const intent = detectDiningIntent(text);
   const yes = isAffirmative(text);
 
+  // A pending choice list outranks proposals: only an exact name/number
+  // selects an entity. Anything else refines, re-lists, or leaves the path.
+  const pending = pendingDiningChoices(history);
+  if (pending) {
+    const sel = selectDiningChoice(text, pending);
+    if (sel) {
+      return { kind: "approved", anchor: sel.anchor, city: sel.city, confirmedEntityId: sel.entityId };
+    }
+    // Unrelated questions never re-trigger, even if they name the city.
+    if (!intent && UNRELATED_Q_RE.test(text)) {
+      return { kind: "none" as const };
+    }
+    const pendingCurrent = extractDiningParams([text]);
+    // A bare yes re-lists the choices; it never approves on its own.
+    if (yes && pendingCurrent.anchor === null && pendingCurrent.city === null) {
+      return { kind: "choose", anchor: pending.anchor, city: pending.city, choices: pending.choices };
+    }
+    // New anchor/city text starts a fresh proposal needing fresh approval.
+    if (pendingCurrent.anchor !== null || pendingCurrent.city !== null) {
+      return {
+        kind: "propose" as const,
+        anchor: pendingCurrent.anchor ?? pending.anchor,
+        city: pendingCurrent.city ?? pending.city,
+      };
+    }
+    return { kind: "none" as const };
+  }
+
   if (proposal) {
     const contradicts =
       (current.anchor !== null && current.anchor !== proposal.anchor) ||
@@ -258,11 +290,75 @@ export function buildDiningClarify(missing: "anchor" | "city" | "both", params: 
   return `I\u2019d love to find you something \u2014 which named place should I anchor on (for example a restaurant you like), and which city should I search in? I need both before I can ask Qloo, and I\u2019ll confirm with you first.`;
 }
 
-/** Strict-gated live lookup. Only anchor/city/entity IDs cross to Qloo. */
+const CHOICES_MARKER = "Qloo candidates for";
+
+/** Ask the user to pick one Qloo entity. IDs ride along in [select:...] tags
+ * so the reply maps back to the exact entity without a second search. */
+export function buildDiningChoices(anchor: string, city: string, choices: DiningChoice[]): string {
+  return [
+    `Qloo found several matches for \u201c${anchor}\u201d — reply with the exact name (or number). Only the entity you pick runs Insights.`,
+    `${CHOICES_MARKER} \u201c${anchor}\u201d in \u201c${city}\u201d:`,
+    ...choices.map((c, i) => `${i + 1}. ${c.name} (${c.kind}) [select:${c.entity_id}]`),
+  ].join("\n");
+}
+
+const CHOICE_LINE_RE = /^(\d+)\.\s+(.+?)\s+\(([^)]+)\)\s+\[select:([0-9A-Za-z-]+)\]\s*$/;
+
+/** The latest assistant choices block, if the latest assistant message is one. */
+export function pendingDiningChoices(
+  history: { role: "user" | "assistant"; text: string }[]
+): { anchor: string; city: string; choices: DiningChoice[] } | null {
+  const assistants = history.filter((h) => h.role === "assistant");
+  const last = assistants[assistants.length - 1];
+  if (!last || !last.text.includes(CHOICES_MARKER)) return null;
+  const lines = last.text.split("\n");
+  const marker = lines.findIndex((l) => l.includes(CHOICES_MARKER));
+  const choices: DiningChoice[] = [];
+  for (const line of lines.slice(marker + 1)) {
+    const m = line.trim().match(CHOICE_LINE_RE);
+    if (m?.[2] && m?.[4]) choices.push({ name: m[2], entity_id: m[4], kind: m[3] ?? "entity" });
+  }
+  if (choices.length === 0) return null;
+  const hm = last.text.match(/Qloo candidates for \u201c(.+?)\u201d in \u201c(.+?)\u201d/);
+  return { anchor: hm?.[1] ?? "", city: hm?.[2] ?? "", choices };
+}
+
+const NUMBER_WORDS: Record<string, number> = {
+  one: 1, two: 2, three: 3, four: 4, first: 1, second: 2, third: 3, fourth: 4,
+};
+
+/** Match the current message to one pending choice by exact name
+ * (case-insensitive, optional leading yes/ok), or number/word. Anything
+ * else is not a selection. */
+export function selectDiningChoice(
+  text: string,
+  pending: { anchor: string; city: string; choices: DiningChoice[] }
+): { anchor: string; city: string; entityId: string } | null {
+  const raw = text.trim().toLowerCase();
+  if (!raw) return null;
+  const t = raw.replace(/^(yes|yeah|yep|yup|sure|ok|okay|please)\b[,.\s]+/, "");
+  if (!t) return null;
+  const digit = t.match(/^(\d+)\.?$/);
+  if (digit) {
+    const c = pending.choices[parseInt(digit[1], 10) - 1];
+    return c ? { anchor: c.name, city: pending.city, entityId: c.entity_id } : null;
+  }
+  const word = NUMBER_WORDS[t.replace(/[^a-z]/g, "")];
+  if (word) {
+    const c = pending.choices[word - 1];
+    return c ? { anchor: c.name, city: pending.city, entityId: c.entity_id } : null;
+  }
+  const c = pending.choices.find((c) => c.name.toLowerCase() === t);
+  return c ? { anchor: c.name, city: pending.city, entityId: c.entity_id } : null;
+}
+
+/** Strict-gated live lookup. Only anchor/city/confirmed-entity IDs cross to
+ * Qloo. A confirmed entity ID skips Search and goes straight to Insights. */
 export async function runDiningLookup(opts: {
   userId: string;
   anchor: string;
   city: string;
+  confirmedEntityId?: string;
 }): Promise<DiningLookup> {
   const rl = await checkRateLimitStrict(`qloo:dining:${opts.userId}`, 10, 60_000);
   if (!rl.ok) {
@@ -279,15 +375,42 @@ export async function runDiningLookup(opts: {
       message: "Too many dining lookups in the last minute \u2014 slow down and try again shortly.",
     };
   }
-  const s = await searchAnchor(opts.anchor);
-  if (!s.ok) {
+  if (opts.confirmedEntityId) {
+    if (!/^[0-9A-Za-z-]{8,64}$/.test(opts.confirmedEntityId.trim()) || !/[0-9]/.test(opts.confirmedEntityId)) {
+      return {
+        ok: false,
+        code: "unavailable",
+        message: "That confirmed selection looks invalid. Resolve again and pick from the fresh candidates.",
+      };
+    }
+    const ins = await placeInsights(opts.confirmedEntityId.trim(), { city: opts.city, take: 3 });
+    if (!ins.ok) {
+      return { ok: false, code: "unavailable", message: ins.failure.message };
+    }
+    return {
+      ok: true,
+      resolved: { name: opts.anchor, entity_id: opts.confirmedEntityId.trim(), kind: "entity" },
+      candidates: ins.candidates,
+    };
+  }
+  const s = await resolveAnchor(opts.anchor);
+  if (s.status === "failed") {
+    const f = s.failure;
     return {
       ok: false,
-      code: s.failure.status === "no_match" ? "no_match" : "unavailable",
+      code: f.status === "no_match" ? "no_match" : "unavailable",
       message:
-        s.failure.status === "no_match"
+        f.status === "no_match"
           ? `Qloo has no match for \u201c${opts.anchor}\u201d. Try a specific named place, artist, or film.`
-          : s.failure.message,
+          : f.message,
+    };
+  }
+  if (s.status === "ambiguous") {
+    return {
+      ok: false,
+      code: "ambiguous",
+      message: `Qloo matches several places for \u201c${opts.anchor}\u201d.`,
+      choices: s.candidates.map((c) => ({ name: c.name, entity_id: c.entity_id, kind: c.kind })),
     };
   }
   const ins = await placeInsights(s.entity.entity_id, { city: opts.city, take: 3 });
@@ -313,8 +436,18 @@ export async function executeDiningTurn(
     ) => Promise<string>;
   }
 ): Promise<{ message: string; evidence: DiningEvidence | null }> {
-  const lookup = await runDiningLookup({ userId: ctx.userId, anchor: turn.anchor, city: turn.city });
-  if (!lookup.ok) return { message: lookup.message, evidence: null };
+  const lookup = await runDiningLookup({
+    userId: ctx.userId,
+    anchor: turn.anchor,
+    city: turn.city,
+    ...(turn.confirmedEntityId ? { confirmedEntityId: turn.confirmedEntityId } : {}),
+  });
+  if (!lookup.ok) {
+    if (lookup.code === "ambiguous") {
+      return { message: buildDiningChoices(turn.anchor, turn.city, lookup.choices), evidence: null };
+    }
+    return { message: lookup.message, evidence: null };
+  }
   const evidence: DiningEvidence = {
     anchor: turn.anchor,
     city: turn.city,

@@ -12,6 +12,8 @@ import {
   type TasteComparison,
 } from "@/lib/taste-evidence";
 
+type Choice = { name: string; entity_id: string; kind: string };
+
 type Candidate = {
   name: string;
   entity_id: string;
@@ -68,6 +70,8 @@ const FRIENDLY: Record<string, string> = {
   qloo_rate_limited: "Qloo is rate-limiting taste lookups.",
   qloo_unauthorized: "This server's Qloo credentials were rejected.",
   qloo_unavailable: "Qloo is unreachable right now.",
+  qloo_ambiguous: "Qloo found several matches. Pick the intended one below.",
+  stale_selection: "That selection is stale. Resolve again and pick from the fresh candidates.",
 };
 
 /** Venue card: real Qloo photo when supplied (entity-matched server-side),
@@ -131,6 +135,16 @@ export function Taste() {
   const [correction, setCorrection] = useState<Correction | null>(null);
   const [correcting, setCorrecting] = useState(false);
   const [correctionError, setCorrectionError] = useState<{ code: string; message: string } | null>(null);
+  const [resolution, setResolution] = useState<{
+    entity: { name: string; entity_id: string; kind: string };
+    searchTotal: number;
+  } | null>(null);
+  const [choices, setChoices] = useState<Choice[] | null>(null);
+  const [correctionRes, setCorrectionRes] = useState<{
+    anchor: string;
+    entity: { name: string; entity_id: string; kind: string } | null;
+    choices: Choice[];
+  } | null>(null);
 
   const guidance = guidanceFor(anchor);
   const named = anchorLooksNamed(anchor);
@@ -141,6 +155,8 @@ export function Taste() {
     setPhase({ kind: "loading" });
     setCorrection(null);
     setCorrectionError(null);
+    setResolution(null);
+    setChoices(null);
     const params = new URLSearchParams({ anchor: a });
     if (city.trim()) params.set("city", city.trim());
     const r = await call(`/api/tasteproof?${params.toString()}`);
@@ -149,6 +165,35 @@ export function Taste() {
       setPhase({ kind: "error", code, message: errorMessage(r) });
       return;
     }
+    const body = r.body as unknown as
+      | { stage: "resolved"; resolved: { name: string; entity_id: string; kind: string }; searchTotal: number }
+      | { stage: "choices"; candidates: Choice[] };
+    if (body.stage === "choices") {
+      setChoices(body.candidates);
+      setPhase({ kind: "idle" });
+      return;
+    }
+    setResolution({ entity: body.resolved, searchTotal: body.searchTotal });
+    setPhase({ kind: "idle" });
+  }
+
+  async function confirmLookup(entityId: string) {
+    const a = anchor.trim();
+    if (!a) return;
+    setPhase({ kind: "loading" });
+    const params = new URLSearchParams({ anchor: a });
+    if (city.trim()) params.set("city", city.trim());
+    params.set("entityId", entityId);
+    const r = await call(`/api/tasteproof?${params.toString()}`);
+    if (!r.ok) {
+      const code = (r.body.error as { code?: string } | undefined)?.code ?? "unknown";
+      setResolution(null);
+      setChoices(null);
+      setPhase({ kind: "error", code, message: errorMessage(r) });
+      return;
+    }
+    setResolution(null);
+    setChoices(null);
     setPhase({ kind: "done", result: r.body as unknown as Result });
   }
 
@@ -190,13 +235,39 @@ export function Taste() {
     if (revised.length < 2) return;
     setCorrecting(true);
     setCorrectionError(null);
+    setCorrectionRes(null);
     const params = new URLSearchParams({ anchor: revised });
     if (city.trim()) params.set("city", city.trim());
     const r = await call(`/api/tasteproof?${params.toString()}`);
+    setCorrecting(false);
     if (!r.ok) {
       const code = (r.body.error as { code?: string } | undefined)?.code ?? "unknown";
       setCorrectionError({ code, message: errorMessage(r) });
-      setCorrecting(false);
+      return;
+    }
+    const body = r.body as unknown as
+      | { stage: "resolved"; resolved: { name: string; entity_id: string; kind: string } }
+      | { stage: "choices"; candidates: Choice[] };
+    if (body.stage === "choices") {
+      setCorrectionRes({ anchor: revised, entity: null, choices: body.candidates });
+      return;
+    }
+    setCorrectionRes({ anchor: revised, entity: body.resolved, choices: [] });
+  }
+
+  async function confirmCorrection(entityId: string) {
+    if (phase.kind !== "done" || !correctionRes) return;
+    setCorrecting(true);
+    setCorrectionError(null);
+    const params = new URLSearchParams({ anchor: correctionRes.anchor });
+    if (city.trim()) params.set("city", city.trim());
+    params.set("entityId", entityId);
+    const r = await call(`/api/tasteproof?${params.toString()}`);
+    setCorrecting(false);
+    if (!r.ok) {
+      const code = (r.body.error as { code?: string } | undefined)?.code ?? "unknown";
+      setCorrectionRes(null);
+      setCorrectionError({ code, message: errorMessage(r) });
       return;
     }
     const after = r.body as unknown as Result;
@@ -213,7 +284,8 @@ export function Taste() {
     });
     setAnchor(after.anchor);
     setPhase({ kind: "done", result: after });
-    setCorrecting(false);
+    setCorrectionRes(null);
+    setCorrectionInput("");
   }
 
   function undoCorrection() {
@@ -223,6 +295,9 @@ export function Taste() {
     setCorrection(null);
     setCorrectionError(null);
     setCorrectionInput("");
+    setCorrectionRes(null);
+    setResolution(null);
+    setChoices(null);
   }
 
   const evidence =
@@ -361,7 +436,11 @@ export function Taste() {
             id="taste-anchor"
             className="mem-input"
             value={anchor}
-            onChange={(e) => setAnchor(e.target.value)}
+            onChange={(e) => {
+              setAnchor(e.target.value);
+              setResolution(null);
+              setChoices(null);
+            }}
             placeholder="Nobu Restaurant"
             maxLength={80}
             autoComplete="off"
@@ -396,23 +475,56 @@ export function Taste() {
       <p className="mem-note">
         {pick ? (
           <>
-            Approval: this sends exactly “{anchor.trim() || "…"}”
-            {city.trim() ? ` plus “${city.trim()}”` : ""} to Qloo, an external cultural
-            intelligence provider. It does not send your memory text, reasons, identifiers,
+            Approval: this resolves “{anchor.trim() || "…"}”
+            {city.trim() ? ` plus “${city.trim()}”` : ""} through Qloo Search, then — only on your confirmation — fetches dining candidates. It never sends your memory text, reasons, identifiers,
             or anything else.
           </>
         ) : (
           <>
-            Lookup sends only the anchor name and city to Qloo. Nothing from your memories
+            Lookup first resolves the anchor name through Qloo Search; candidates load only after you confirm. Nothing from your memories
             leaves this browser session.
           </>
         )}{" "}
         {guidance && named === false && <span>{guidance}</span>}
       </p>
 
+      {phase.kind === "idle" && (resolution || choices) && (
+        <section aria-label="TasteProof resolution" className="mem-card">
+          {resolution && (
+            <div>
+              <p className="mem-meta">
+                Qloo resolved “{anchor.trim()}” → {resolution.entity.name} (
+                {shortBlob(resolution.entity.entity_id)}) · {resolution.searchTotal}{" "}
+                {resolution.searchTotal === 1 ? "search hit" : "search hits"}.
+              </p>
+              <p className="mem-meta">
+                Confirm to fetch dining candidates. No Insights lookup has run yet.
+              </p>
+              <button type="button" className="app-btn app-btn-primary" onClick={() => void confirmLookup(resolution.entity.entity_id)}>
+                Show dining candidates
+              </button>
+            </div>
+          )}
+          {choices && (
+            <div>
+              <p className="mem-meta">
+                Qloo found several matches for “{anchor.trim()}”. Pick the intended one — only the chosen entity runs Insights.
+              </p>
+              <div className="mem-filters">
+                {choices.map((c) => (
+                  <button key={c.entity_id} type="button" className="app-btn app-btn-glass" onClick={() => void confirmLookup(c.entity_id)}>
+                    {c.name} · {c.kind}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </section>
+      )}
+
       {phase.kind === "loading" && (
         <p className="mem-note" role="status">
-          Resolving the anchor, then asking Qloo Insights…
+          Resolving the anchor…
         </p>
       )}
 
@@ -545,7 +657,10 @@ export function Taste() {
                       id="taste-correct-anchor"
                       className="mem-input"
                       value={correctionInput}
-                      onChange={(e) => setCorrectionInput(e.target.value)}
+                      onChange={(e) => {
+                        setCorrectionInput(e.target.value);
+                        setCorrectionRes(null);
+                      }}
                       placeholder={phase.result.anchor}
                       maxLength={80}
                       autoComplete="off"
@@ -558,19 +673,49 @@ export function Taste() {
                     disabled={correcting || correctionInput.trim().length < 2}
                     title={
                       correctionInput.trim()
-                        ? `Approve Qloo lookup for “${correctionInput.trim()}”${city.trim() ? ` in ${city.trim()}` : ""}`
+                        ? `Resolve revised anchor`
                         : undefined
                     }
                   >
-                    {correcting ? "Asking Qloo…" : "Approve revised Qloo lookup"}
+                    {correcting ? "Resolving…" : "Resolve revised anchor"}
                   </button>
                 </div>
+                {correctionRes?.entity && (
+                  <div>
+                    <p className="mem-meta">
+                      Qloo resolved “{correctionRes.anchor}” → {correctionRes.entity.name} (
+                      {shortBlob(correctionRes.entity.entity_id)}). Confirm to rerun Insights.
+                    </p>
+                    <button
+                      type="button"
+                      className="app-btn app-btn-primary"
+                      onClick={() => void confirmCorrection(correctionRes.entity!.entity_id)}
+                      disabled={correcting}
+                    >
+                      {correcting ? "Asking Qloo…" : "Show revised candidates"}
+                    </button>
+                  </div>
+                )}
+                {correctionRes && correctionRes.choices.length > 0 && (
+                  <div>
+                    <p className="mem-meta">
+                      Qloo found several matches for “{correctionRes.anchor}”. Pick the intended one.
+                    </p>
+                    <div className="mem-filters">
+                      {correctionRes.choices.map((c) => (
+                        <button key={c.entity_id} type="button" className="app-btn app-btn-glass" onClick={() => void confirmCorrection(c.entity_id)} disabled={correcting}>
+                          {c.name} · {c.kind}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 {correctionInput.trim() && guidanceFor(correctionInput) && (
                   <p className="mem-note">{guidanceFor(correctionInput)}</p>
                 )}
-                {correcting && (
+                {correcting && !correctionRes && (
                   <p className="mem-note" role="status">
-                    Resolving the revised anchor, then asking Qloo Insights…
+                    Resolving the revised anchor…
                   </p>
                 )}
                 {correctionError && (

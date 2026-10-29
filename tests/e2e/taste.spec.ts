@@ -1,8 +1,11 @@
 import { expect, test } from "@playwright/test";
 
-// TasteProof QA browser journey. Live-Qloo calls are bounded: one manual
-// lookup plus one honest no-match per project. Screenshots show public
-// Qloo venues only; no credentials, cookies, or private memories appear.
+// TasteProof QA browser journey. Two-step resolution: the app resolves the
+// anchor first and only runs Insights after explicit confirmation, so route
+// mocks answer by the presence of the entityId param. Live-Qloo calls are
+// bounded: one manual resolve+confirm per project plus honest no-matches.
+// Screenshots show public Qloo venues only; no credentials, cookies, or
+// private memories appear.
 
 const consoleErrors: string[] = [];
 
@@ -16,7 +19,7 @@ test.beforeEach(({ page }) => {
   });
 });
 
-test("landing links Taste and /taste manual lookup returns real Qloo candidates", async ({ page }) => {
+test("landing links Taste and /taste manual lookup confirms before Insights", async ({ page }) => {
   await page.goto("/");
   await expect(page.locator("main, [data-dock-slot], h1").first()).toBeVisible();
   await page.screenshot({ path: "test-artifacts/landing.png" });
@@ -30,6 +33,11 @@ test("landing links Taste and /taste manual lookup returns real Qloo candidates"
   await expect(page.locator("#taste-city")).toHaveValue("Lagos");
 
   await page.getByRole("button", { name: /find dining candidates/i }).click();
+  // Step 1: explicit resolution, no candidates yet.
+  await expect(page.getByText(/Qloo resolved/i).first()).toBeVisible({ timeout: 30000 });
+  await expect(page.locator(".mem-grid .mem-card")).toHaveCount(0);
+  await page.getByRole("button", { name: /show dining candidates/i }).click();
+  // Step 2: confirmed Insights results.
   const cards = page.locator(".mem-grid .mem-card");
   await expect(cards.first()).toBeVisible({ timeout: 30000 });
   const count = await cards.count();
@@ -99,13 +107,60 @@ test("provider outage renders the configured-state copy without fixtures", async
   await page.screenshot({ path: "test-artifacts/taste-not-configured.png" });
 });
 
-test("correction reruns Qloo and shows honest before/after with undo", async ({ page }) => {
-  const first = {
+test("ambiguous anchor offers candidate choices, never auto-resolves", async ({ page }) => {
+  const choices = {
     ok: true,
-    anchor: "Nobu Restaurant",
+    stage: "choices",
+    anchor: "Terra",
     city: "Lagos",
-    resolved: { name: "Nobu Restaurant", entity_id: "QLOO-BEFORE-1", kind: "restaurant" },
-    searchTotal: 20,
+    candidates: [
+      { name: "Terra Kulture", entity_id: "QLOO-TK-1", kind: "place" },
+      { name: "Terra Madre", entity_id: "QLOO-TM-2", kind: "restaurant" },
+    ],
+    searchTotal: 2,
+  };
+  const chosen = {
+    ok: true,
+    stage: "candidates",
+    anchor: "Terra Kulture",
+    city: "Lagos",
+    resolved: { name: "Terra Kulture", entity_id: "QLOO-TK-1", kind: "place" },
+    searchTotal: 2,
+    candidates: [
+      { name: "Chosen One", entity_id: "CHOSEN-A", kind: "place", place: null, explanation: null },
+    ],
+    evidence: { anchor: "Terra", entityId: "QLOO-TK-1", entityKind: "place", candidateIds: ["CHOSEN-A"], city: "Lagos" },
+  };
+  await page.route("**/api/tasteproof**", (route) => {
+    const url = new URL(route.request().url());
+    if (url.searchParams.get("entityId") === "QLOO-TK-1") {
+      return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(chosen) });
+    }
+    return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(choices) });
+  });
+  await page.goto("/taste");
+  await page.locator("#taste-anchor").fill("Terra");
+  await page.getByRole("button", { name: /find dining candidates/i }).click();
+  // No candidates before an explicit pick: the choice list is the only result.
+  await expect(page.getByText(/found several matches/i).first()).toBeVisible({ timeout: 15000 });
+  await expect(page.locator(".mem-grid .mem-card")).toHaveCount(0);
+  await page.getByRole("button", { name: /terra kulture/i }).click();
+  await expect(page.getByText("Chosen One").first()).toBeVisible({ timeout: 15000 });
+  await expect(page.getByText("Terra Madre")).toBeHidden();
+});
+
+test("correction resolves the revision and confirms before rerunning Qloo", async ({ page }) => {
+  const resolveNobu = {
+    ok: true, stage: "resolved", anchor: "Nobu Restaurant", city: "Lagos",
+    resolved: { name: "Nobu Restaurant", entity_id: "QLOO-BEFORE-1", kind: "restaurant" }, searchTotal: 20,
+  };
+  const resolveTerra = {
+    ok: true, stage: "resolved", anchor: "Terra Kulture", city: "Lagos",
+    resolved: { name: "Terra Kulture", entity_id: "QLOO-AFTER-9", kind: "place" }, searchTotal: 20,
+  };
+  const first = {
+    ok: true, stage: "candidates", anchor: "Nobu Restaurant", city: "Lagos",
+    resolved: { name: "Nobu Restaurant", entity_id: "QLOO-BEFORE-1", kind: "restaurant" }, searchTotal: 20,
     candidates: [
       { name: "Before One", entity_id: "CAND-A", kind: "place", place: "Lagos", explanation: "Before affinity." },
       { name: "Before Two", entity_id: "CAND-B", kind: "place", place: null, explanation: null },
@@ -113,11 +168,8 @@ test("correction reruns Qloo and shows honest before/after with undo", async ({ 
     evidence: { anchor: "Nobu Restaurant", entityId: "QLOO-BEFORE-1", entityKind: "restaurant", candidateIds: ["CAND-A", "CAND-B"], city: "Lagos" },
   };
   const second = {
-    ok: true,
-    anchor: "Terra Kulture",
-    city: "Lagos",
-    resolved: { name: "Terra Kulture", entity_id: "QLOO-AFTER-9", kind: "place" },
-    searchTotal: 20,
+    ok: true, stage: "candidates", anchor: "Terra Kulture", city: "Lagos",
+    resolved: { name: "Terra Kulture", entity_id: "QLOO-AFTER-9", kind: "place" }, searchTotal: 20,
     candidates: [
       { name: "Before Two", entity_id: "CAND-B", kind: "place", place: null, explanation: null },
       { name: "After Three", entity_id: "CAND-C", kind: "place", place: "Lagos", explanation: null },
@@ -127,17 +179,27 @@ test("correction reruns Qloo and shows honest before/after with undo", async ({ 
   await page.route("**/api/tasteproof**", (route) => {
     const url = new URL(route.request().url());
     const a = (url.searchParams.get("anchor") ?? "").toLowerCase();
-    const payload = a.includes("terra") ? second : first;
+    const entityId = url.searchParams.get("entityId") ?? "";
+    if (!entityId) {
+      const payload = a.includes("terra") ? resolveTerra : resolveNobu;
+      return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(payload) });
+    }
+    const payload = entityId.includes("AFTER") ? second : first;
     return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(payload) });
   });
   await page.goto("/taste");
   await page.getByRole("button", { name: /find dining candidates/i }).click();
+  await expect(page.getByText(/Qloo resolved/i).first()).toBeVisible({ timeout: 15000 });
+  await page.getByRole("button", { name: /show dining candidates/i }).click();
   await expect(page.getByText("Before One").first()).toBeVisible({ timeout: 15000 });
   await expect(page.locator("#taste-correct-anchor")).toBeVisible();
   // Changing the input alone must not refetch: no comparison yet.
   await page.locator("#taste-correct-anchor").fill("Terra Kulture");
   await expect(page.getByLabel("Correction comparison")).toBeHidden();
-  await page.getByRole("button", { name: /approve revised qloo lookup/i }).click();
+  await page.getByRole("button", { name: /resolve revised anchor/i }).click();
+  await expect(page.getByText(/Qloo resolved.*Terra Kulture/i).first()).toBeVisible({ timeout: 15000 });
+  await expect(page.getByLabel("Correction comparison")).toBeHidden();
+  await page.getByRole("button", { name: /show revised candidates/i }).click();
   const comp = page.getByLabel("Correction comparison");
   await expect(comp).toBeVisible({ timeout: 15000 });
   await expect(comp.getByText(/Changed:/)).toBeVisible();
@@ -151,36 +213,46 @@ test("correction reruns Qloo and shows honest before/after with undo", async ({ 
 });
 
 test("unchanged correction says so honestly", async ({ page }) => {
+  const resolved = {
+    ok: true, stage: "resolved", anchor: "Nobu Restaurant", city: "Lagos",
+    resolved: { name: "Nobu Restaurant", entity_id: "QLOO-SAME-1", kind: "restaurant" }, searchTotal: 5,
+  };
   const payload = {
-    ok: true,
-    anchor: "Nobu Restaurant",
-    city: "Lagos",
-    resolved: { name: "Nobu Restaurant", entity_id: "QLOO-SAME-1", kind: "restaurant" },
-    searchTotal: 5,
+    ok: true, stage: "candidates", anchor: "Nobu Restaurant", city: "Lagos",
+    resolved: { name: "Nobu Restaurant", entity_id: "QLOO-SAME-1", kind: "restaurant" }, searchTotal: 5,
     candidates: [
       { name: "Same One", entity_id: "SAME-A", kind: "place", place: null, explanation: null },
     ],
     evidence: { anchor: "Nobu Restaurant", entityId: "QLOO-SAME-1", entityKind: "restaurant", candidateIds: ["SAME-A"], city: "Lagos" },
   };
-  await page.route("**/api/tasteproof**", (route) =>
-    route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(payload) })
-  );
+  await page.route("**/api/tasteproof**", (route) => {
+    const url = new URL(route.request().url());
+    if (url.searchParams.get("entityId")) {
+      return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(payload) });
+    }
+    return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(resolved) });
+  });
   await page.goto("/taste");
   await page.getByRole("button", { name: /find dining candidates/i }).click();
+  await expect(page.getByText(/Qloo resolved/i).first()).toBeVisible({ timeout: 15000 });
+  await page.getByRole("button", { name: /show dining candidates/i }).click();
   await expect(page.getByText("Same One").first()).toBeVisible({ timeout: 15000 });
   await page.locator("#taste-correct-anchor").fill("Nobu Restaurant");
-  await page.getByRole("button", { name: /approve revised qloo lookup/i }).click();
+  await page.getByRole("button", { name: /resolve revised anchor/i }).click();
+  await expect(page.getByText(/Qloo resolved.*Nobu Restaurant/i).first()).toBeVisible({ timeout: 15000 });
+  await page.getByRole("button", { name: /show revised candidates/i }).click();
   await expect(page.getByLabel("Correction comparison")).toBeVisible({ timeout: 15000 });
   await expect(page.getByText(/no measurable change/i).first()).toBeVisible();
 });
 
 test("failed revised lookup keeps the before result", async ({ page }) => {
+  const resolved = {
+    ok: true, stage: "resolved", anchor: "Nobu Restaurant", city: "Lagos",
+    resolved: { name: "Nobu Restaurant", entity_id: "QLOO-KEEP-1", kind: "restaurant" }, searchTotal: 5,
+  };
   const good = {
-    ok: true,
-    anchor: "Nobu Restaurant",
-    city: "Lagos",
-    resolved: { name: "Nobu Restaurant", entity_id: "QLOO-KEEP-1", kind: "restaurant" },
-    searchTotal: 5,
+    ok: true, stage: "candidates", anchor: "Nobu Restaurant", city: "Lagos",
+    resolved: { name: "Nobu Restaurant", entity_id: "QLOO-KEEP-1", kind: "restaurant" }, searchTotal: 5,
     candidates: [
       { name: "Keep Me", entity_id: "KEEP-A", kind: "place", place: null, explanation: null },
     ],
@@ -196,13 +268,18 @@ test("failed revised lookup keeps the before result", async ({ page }) => {
         body: JSON.stringify({ ok: false, error: { code: "qloo_no_match", message: 'Qloo has no match for "xqz".' } }),
       });
     }
-    return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(good) });
+    if (url.searchParams.get("entityId")) {
+      return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(good) });
+    }
+    return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(resolved) });
   });
   await page.goto("/taste");
   await page.getByRole("button", { name: /find dining candidates/i }).click();
+  await expect(page.getByText(/Qloo resolved/i).first()).toBeVisible({ timeout: 15000 });
+  await page.getByRole("button", { name: /show dining candidates/i }).click();
   await expect(page.getByText("Keep Me").first()).toBeVisible({ timeout: 15000 });
   await page.locator("#taste-correct-anchor").fill("xqz-not-a-place-zzz-123");
-  await page.getByRole("button", { name: /approve revised qloo lookup/i }).click();
+  await page.getByRole("button", { name: /resolve revised anchor/i }).click();
   await expect(page.getByText(/qloo has no match for that anchor/i).first()).toBeVisible({ timeout: 15000 });
   await expect(page.getByText("Keep Me").first()).toBeVisible();
   await expect(page.getByLabel("Correction comparison")).toBeHidden();

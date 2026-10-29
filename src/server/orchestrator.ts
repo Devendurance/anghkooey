@@ -19,6 +19,7 @@ import {
 } from "./trip-brief";
 import { parseNightlyBudget, searchHotels, type HotelSearchResult } from "./hotels";
 import {
+  buildDiningChoices,
   buildDiningClarify,
   buildDiningProposal,
   executeDiningTurn,
@@ -346,6 +347,8 @@ export async function handleMessage(input: HandleMessageInput): Promise<ChatResu
         text,
       ]);
       diningMessage = buildDiningClarify(diningTurn.missing, merged);
+    } else if (diningTurn.kind === "choose") {
+      diningMessage = buildDiningChoices(diningTurn.anchor, diningTurn.city, diningTurn.choices);
     } else {
       const done = await executeDiningTurn(diningTurn, {
         userId: canonicalUserId,

@@ -143,14 +143,25 @@ describe("TasteProof Slice 1 (synthetic fixtures)", () => {
   it("sends only anchor/city/entity IDs to Qloo (request minimization)", async () => {
     const fn = mockFetchSequence([
       { status: 200, body: SYNTHETIC_SEARCH },
+      { status: 200, body: SYNTHETIC_SEARCH },
       { status: 200, body: SYNTHETIC_INSIGHTS },
     ]);
-    const res = await GET(new Request("http://localhost/api/tasteproof?anchor=Synthetic%20Bistro&city=Nowhere"));
-    expect(res.status).toBe(200);
+    const resolve = await GET(new Request("http://localhost/api/tasteproof?anchor=Synthetic%20Bistro&city=Nowhere"));
+    expect(resolve.status).toBe(200);
+    const resolved = (await resolve.json()) as { stage: string; resolved: { entity_id: string } };
+    // Step 1 resolves only: a single Search call, no Insights yet.
+    expect(resolved.stage).toBe("resolved");
+    expect(fn).toHaveBeenCalledTimes(1);
+    expect(String(fn.mock.calls[0][0])).toContain("/search?query=Synthetic%20Bistro");
+    const confirm = await GET(
+      new Request(
+        "http://localhost/api/tasteproof?anchor=Synthetic%20Bistro&city=Nowhere&entityId=SYNTH-ENTITY-1"
+      )
+    );
+    expect(confirm.status).toBe(200);
     const urls = fn.mock.calls.map((c) => String(c[0]));
-    expect(urls[0]).toContain("/search?query=Synthetic%20Bistro");
-    expect(urls[1]).toContain("signal.interests.entities=SYNTH-ENTITY-1");
-    expect(urls[1]).toContain("filter.location.query=Nowhere");
+    expect(urls[2]).toContain("signal.interests.entities=SYNTH-ENTITY-1");
+    expect(urls[2]).toContain("filter.location.query=Nowhere");
     for (const u of urls) {
       expect(u).not.toContain("memory");
       expect(u).not.toContain("session");
@@ -160,9 +171,15 @@ describe("TasteProof Slice 1 (synthetic fixtures)", () => {
   it("route returns the evidence chain and only Qloo-supplied candidates (no fabrication)", async () => {
     mockFetchSequence([
       { status: 200, body: SYNTHETIC_SEARCH },
+      { status: 200, body: SYNTHETIC_SEARCH },
       { status: 200, body: SYNTHETIC_INSIGHTS },
     ]);
-    const res = await GET(new Request("http://localhost/api/tasteproof?anchor=Synthetic%20Bistro"));
+    const resolve = await GET(new Request("http://localhost/api/tasteproof?anchor=Synthetic%20Bistro"));
+    expect(resolve.status).toBe(200);
+    expect(((await resolve.json()) as { stage: string }).stage).toBe("resolved");
+    const res = await GET(
+      new Request("http://localhost/api/tasteproof?anchor=Synthetic%20Bistro&entityId=SYNTH-ENTITY-1")
+    );
     expect(res.status).toBe(200);
     const body = (await res.json()) as {
       ok: boolean;
@@ -184,5 +201,74 @@ describe("TasteProof Slice 1 (synthetic fixtures)", () => {
     expect(res.status).toBe(404);
     const body = (await res.json()) as { error: { code: string } };
     expect(body.error.code).toBe("qloo_no_match");
+  });
+
+  it("route returns candidate choices without Insights on ambiguous anchors", async () => {
+    const fn = mockFetchSequence([
+      {
+        status: 200,
+        body: {
+          results: [
+            { name: "Terra Place One", entity_id: "SYNTH-T-1", subtype: "place" },
+            { name: "Terra Place Two", entity_id: "SYNTH-T-2", subtype: "place" },
+          ],
+        },
+      },
+    ]);
+    const res = await GET(new Request("http://localhost/api/tasteproof?anchor=Terra%20Place"));
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      stage: string;
+      candidates: Array<{ entity_id: string }>;
+    };
+    expect(body.stage).toBe("choices");
+    expect(body.candidates.map((c) => c.entity_id)).toEqual(["SYNTH-T-1", "SYNTH-T-2"]);
+    // No Insights call happened: only the Search request went out.
+    expect(fn).toHaveBeenCalledTimes(1);
+  });
+
+  it("route confirms a listed ambiguous choice without re-asking", async () => {
+    mockFetchSequence([
+      {
+        status: 200,
+        body: {
+          results: [
+            { name: "Terra Kulture", entity_id: "SYNTH-TK-1", subtype: "place" },
+            { name: "Terra Madre", entity_id: "SYNTH-TM-2", subtype: "restaurant" },
+          ],
+        },
+      },
+      { status: 200, body: SYNTHETIC_INSIGHTS },
+    ]);
+    const res = await GET(
+      new Request("http://localhost/api/tasteproof?anchor=Terra&entityId=SYNTH-TK-1")
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { stage: string; evidence: { entityId: string } };
+    expect(body.stage).toBe("candidates");
+    expect(body.evidence.entityId).toBe("SYNTH-TK-1");
+  });
+
+  it("route rejects confirmation for an entity outside the fresh resolution", async () => {
+    const fn = mockFetchSequence([{ status: 200, body: SYNTHETIC_SEARCH }]);
+    const res = await GET(
+      new Request("http://localhost/api/tasteproof?anchor=Synthetic%20Bistro&entityId=SYNTH-INTRUDER-9")
+    );
+    expect(res.status).toBe(409);
+    const body = (await res.json()) as { error: { code: string } };
+    expect(body.error.code).toBe("stale_selection");
+    expect(fn).toHaveBeenCalledTimes(1);
+  });
+
+  it("searchAnchor surfaces ambiguity instead of picking first", async () => {
+    mockFetchOnce(200, {
+      results: [
+        { name: "Terra Place One", entity_id: "SYNTH-T-1" },
+        { name: "Terra Place Two", entity_id: "SYNTH-T-2" },
+      ],
+    });
+    const r = await searchAnchor("Terra Place");
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.failure.status).toBe("ambiguous");
   });
 });

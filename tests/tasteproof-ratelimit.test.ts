@@ -88,15 +88,30 @@ describe("TasteProof strict rate limit (mocked store, synthetic Qloo)", () => {
     expect(r).toEqual({ allowed: true, remaining: 20 });
   });
 
-  it("route returns real candidates when allowance is verified", async () => {
+  it("route resolves first with Search only, then Insights after confirmation", async () => {
     sqlTagReturning([{ count: 2 }]);
-    const fetchFn = mockQlooFetch();
-    const res = await GET(tasteproofReq());
-    expect(res.status).toBe(200);
-    const body = (await res.json()) as { ok: boolean; candidates: Array<{ entity_id: string }> };
+    // Call order: resolve Search, confirm re-resolve Search, confirm Insights.
+    const fetchFn = vi.fn();
+    const searchRes = new Response(JSON.stringify(SYNTHETIC_SEARCH), { status: 200 });
+    fetchFn.mockResolvedValueOnce(searchRes.clone());
+    fetchFn.mockResolvedValueOnce(searchRes.clone());
+    fetchFn.mockResolvedValueOnce(new Response(JSON.stringify(SYNTHETIC_INSIGHTS), { status: 200 }));
+    vi.stubGlobal("fetch", fetchFn);
+    const resolve = await GET(tasteproofReq());
+    expect(resolve.status).toBe(200);
+    expect(((await resolve.json()) as { stage: string }).stage).toBe("resolved");
+    // No Insights yet: a single Search call.
+    expect(fetchFn).toHaveBeenCalledTimes(1);
+    const confirm = await GET(
+      new Request(
+        "http://localhost/api/tasteproof?anchor=Synthetic%20Bistro&city=Nowhere&entityId=SYNTH-ENTITY-1"
+      )
+    );
+    expect(confirm.status).toBe(200);
+    const body = (await confirm.json()) as { ok: boolean; candidates: Array<{ entity_id: string }> };
     expect(body.ok).toBe(true);
     expect(body.candidates.map((c) => c.entity_id)).toEqual(["SYNTH-CAND-1"]);
-    expect(fetchFn).toHaveBeenCalledTimes(2);
+    expect(fetchFn).toHaveBeenCalledTimes(3);
   });
 
   it("route returns 429 without calling Qloo when quota is exceeded", async () => {

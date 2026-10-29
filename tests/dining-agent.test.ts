@@ -7,6 +7,7 @@ import { getSql } from "@/server/db";
 import { chatComplete } from "@/server/deepseek";
 import { handleMessage } from "@/server/orchestrator";
 import {
+  buildDiningChoices,
   buildDiningClarify,
   buildDiningProposal,
   detectDiningIntent,
@@ -14,7 +15,9 @@ import {
   extractDiningParams,
   isAffirmative,
   latestDiningProposal,
+  pendingDiningChoices,
   planDiningTurn,
+  selectDiningChoice,
 } from "@/server/dining";
 // All fixtures SYNTHETIC. DB, DeepSeek, and Qloo are mocked: no network,
 // no Mainnet, no database connection.
@@ -23,7 +26,7 @@ const UID = "123e4567-e89b-42d3-a456-426614174000";
 const SID = "223e4567-e89b-42d3-a456-426614174000";
 
 const SYNTHETIC_SEARCH = {
-  results: [{ name: "Synthetic Bistro", entity_id: "SYNTH-E-1", subtype: "restaurant" }],
+  results: [{ name: "Nobu", entity_id: "SYNTH-E-1", subtype: "restaurant" }],
 };
 
 const SYNTHETIC_INSIGHTS = {
@@ -52,6 +55,20 @@ function mockQlooOk() {
   const fn = vi.fn();
   fn.mockResolvedValueOnce(new Response(JSON.stringify(SYNTHETIC_SEARCH), { status: 200 }));
   fn.mockResolvedValueOnce(new Response(JSON.stringify(SYNTHETIC_INSIGHTS), { status: 200 }));
+  vi.stubGlobal("fetch", fn);
+  return fn;
+}
+
+function mockQlooOkFor(searchBody: unknown) {
+  const fn = vi.fn();
+  fn.mockResolvedValueOnce(new Response(JSON.stringify(searchBody), { status: 200 }));
+  fn.mockResolvedValueOnce(new Response(JSON.stringify(SYNTHETIC_INSIGHTS), { status: 200 }));
+  vi.stubGlobal("fetch", fn);
+  return fn;
+}
+
+function mockQlooOkForInsights() {
+  const fn = vi.fn().mockResolvedValueOnce(new Response(JSON.stringify(SYNTHETIC_INSIGHTS), { status: 200 }));
   vi.stubGlobal("fetch", fn);
   return fn;
 }
@@ -279,6 +296,132 @@ describe("dining orchestrator (mocked provider + composer)", () => {
 
   it("clarify copy is exported and honest", () => {
     expect(buildDiningClarify("both", { anchor: null, city: null })).toMatch(/need both/i);
+  });
+});
+
+describe("dining entity confirmation (mocked Qloo)", () => {
+  const AMBIGUOUS_SEARCH = {
+    results: [
+      { name: "Terra Kulture", entity_id: "SYNTH-TK-1", subtype: "place" },
+      { name: "Terra Madre", entity_id: "SYNTH-TM-2", subtype: "restaurant" },
+    ],
+  };
+  const CHOICES_MSG = buildDiningChoices("Terra", "Lagos", [
+    { name: "Terra Kulture", entity_id: "SYNTH-TK-1", kind: "place" },
+    { name: "Terra Madre", entity_id: "SYNTH-TM-2", kind: "restaurant" },
+  ]);
+  const CHOICES_HISTORY = [
+    { role: "user" as const, text: "Find dining like Terra in Lagos" },
+    { role: "assistant" as const, text: CHOICES_MSG },
+  ];
+
+  it("parses the pending choices block from history", () => {
+    const pending = pendingDiningChoices(CHOICES_HISTORY);
+    expect(pending?.choices.map((c) => c.entity_id)).toEqual(["SYNTH-TK-1", "SYNTH-TM-2"]);
+    expect(pendingDiningChoices(PROPOSAL_HISTORY)).toBeNull();
+  });
+
+  it("selects by exact name or number only", () => {
+    const pending = pendingDiningChoices(CHOICES_HISTORY)!;
+    expect(selectDiningChoice("Terra Kulture", pending)?.entityId).toBe("SYNTH-TK-1");
+    expect(selectDiningChoice("2", pending)?.entityId).toBe("SYNTH-TM-2");
+    expect(selectDiningChoice("first", pending)?.entityId).toBe("SYNTH-TK-1");
+    expect(selectDiningChoice("Terra", pending)).toBeNull();
+    expect(selectDiningChoice("9", pending)).toBeNull();
+  });
+
+  it("approved turn with two strong matches asks for a pick, never Insights", async () => {
+    storeOk(1);
+    const fetchFn = mockQlooOkFor(AMBIGUOUS_SEARCH);
+    const done = await executeDiningTurn(
+      { kind: "approved", anchor: "Terra", city: "Lagos" },
+      {
+        userId: UID,
+        userText: "Yes",
+        memories: [],
+        history: [
+          { role: "user", text: "Find dining like Terra in Lagos" },
+          { role: "assistant", text: buildDiningProposal("Terra", "Lagos") },
+        ],
+        recallStatus: "ok",
+        compose: async () => "unreachable",
+      }
+    );
+    expect(done.evidence).toBeNull();
+    expect(done.message).toContain("Qloo candidates for");
+    expect(done.message).toContain("Terra Kulture");
+    // Search only: Insights never runs without a confirmed entity.
+    expect(fetchFn).toHaveBeenCalledTimes(1);
+    expect(String(fetchFn.mock.calls[0][0])).toContain("/search?");
+  });
+
+  it("picking a choice runs Insights for that exact entity only", async () => {
+    storeOk(1);
+    const fetchFn = mockQlooOkForInsights();
+    const done = await executeDiningTurn(
+      { kind: "approved", anchor: "Terra Madre", city: "Lagos", confirmedEntityId: "SYNTH-TM-2" },
+      {
+        userId: UID,
+        userText: "2",
+        memories: [],
+        history: CHOICES_HISTORY,
+        recallStatus: "ok",
+        compose: echoComposer,
+      }
+    );
+    expect(done.evidence).toMatchObject({ entityId: "SYNTH-TM-2", anchor: "Terra Madre" });
+    expect(done.message).toContain("SYNTH-C-1");
+    // No Search call: the confirmed ID went straight to Insights.
+    expect(fetchFn).toHaveBeenCalledTimes(1);
+    expect(String(fetchFn.mock.calls[0][0])).toContain("signal.interests.entities=SYNTH-TM-2");
+  });
+
+  it("rejects a malformed confirmed ID without calling Qloo", async () => {
+    storeOk(1);
+    const fetchFn = mockQlooOk();
+    let composed = false;
+    const done = await executeDiningTurn(
+      { kind: "approved", anchor: "Terra", city: "Lagos", confirmedEntityId: "not-an-id!!!" },
+      {
+        userId: UID,
+        userText: "1",
+        memories: [],
+        history: CHOICES_HISTORY,
+        recallStatus: "ok",
+        compose: async () => {
+          composed = true;
+          return "unreachable";
+        },
+      }
+    );
+    expect(done.evidence).toBeNull();
+    expect(fetchFn).not.toHaveBeenCalled();
+    expect(composed).toBe(false);
+  });
+
+  it("bare yes with pending choices re-lists instead of approving", () => {
+    const turn = planDiningTurn("Yes", CHOICES_HISTORY);
+    expect(turn.kind).toBe("choose");
+  });
+
+  it("picking by name or number approves with the confirmed entity", () => {
+    expect(planDiningTurn("2", CHOICES_HISTORY)).toEqual({
+      kind: "approved",
+      anchor: "Terra Madre",
+      city: "Lagos",
+      confirmedEntityId: "SYNTH-TM-2",
+    });
+    expect(planDiningTurn("Terra Kulture", CHOICES_HISTORY)).toEqual({
+      kind: "approved",
+      anchor: "Terra Kulture",
+      city: "Lagos",
+      confirmedEntityId: "SYNTH-TK-1",
+    });
+  });
+
+  it("refining during choices starts a new proposal", () => {
+    const turn = planDiningTurn("Actually make it Terra Kulture", CHOICES_HISTORY);
+    expect(turn).toEqual({ kind: "propose", anchor: "Terra Kulture", city: "Lagos" });
   });
 });
 
