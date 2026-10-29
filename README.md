@@ -94,7 +94,7 @@ A quiet hotel room matters differently when you've said road noise kept you awak
 ### How the agentic flow works
 
 1. **You ask in web chat** (`/chat`): *“Find dining like Nobu in Lagos.”*
-2. **The concierge proposes — it does not fire yet:** it names the exact anchor and city and asks for a yes. Nothing leaves the chat until you approve.
+2. **The concierge proposes — it does not fire yet:** it names the exact anchor and city and asks for a yes. No external Qloo lookup fires until you approve.
 3. **On approval it runs live Qloo Search + Insights** (server-side, strict per-user rate limit, only the anchor/city strings cross to Qloo).
 4. **DeepSeek answers grounded in the returned venues only**, separating (a) Qloo's cultural signal, (b) your remembered preferences, and (c) what is NOT verified (availability, prices, bookings).
 5. **Missing details are asked, never invented:** no city → it asks for one; no named anchor → it asks for one and won't guess.
@@ -118,7 +118,7 @@ The layout is responsive — the same discovery on a phone:
 
 ### Memory honesty
 
-Your saved Walrus memories can suggest a taste anchor (the memory panel mines capitalized names from your own words), but **raw memory text, reasons, and identifiers never leave the server**: only the exact anchor + city strings you approve are sent to Qloo. Dining turns are session-only and never written as durable memories.
+Your saved Walrus memories can suggest a taste anchor (the memory panel mines capitalized names from your own words), but **raw memory content, reasons, and identifiers are never transmitted to Qloo**: only the exact anchor + city strings you approve are sent to the external Qloo lookup. Separately, relevant recalled memories may be included in DeepSeek prompts to shape the recommendation text — that stays between our server and the chat model, never Qloo. Dining turns are session-only and never written as durable memories. The demonstration below works with memory saving OFF: “Nobu” is typed by hand, not recalled from a saved memory.
 
 ### Where Qloo sits in the architecture
 
@@ -139,7 +139,7 @@ flowchart LR
 1. Open https://anghkooey.vercel.app/taste — anchor and city are pre-filled (`Nobu Restaurant`, `Lagos`).
 2. Press **Find dining candidates**. Real Qloo venues appear with photos and evidence.
 3. Change the anchor to `Terra Kulture`, press **Approve revised Qloo lookup**, and watch the before/after comparison. Press **Undo** to restore.
-4. Or use `/chat`: *“Find dining like Nobu in Lagos”* → say *“Yes”* → grounded recommendation. (Memory panel use is optional.)
+4. Or use `/chat`: *“Find dining like Nobu in Lagos”* → say *“Yes”* → grounded recommendation. (Memory panel use is optional; memory saving can stay OFF — the demo anchor is typed, not recalled.)
 
 ### What was added during the hackathon
 

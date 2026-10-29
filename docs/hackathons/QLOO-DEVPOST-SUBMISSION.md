@@ -23,7 +23,7 @@ Anghkooey is a personal AI concierge (web chat, Telegram, iMessage) with opt-in 
 1. **Agentic chat lookup** (`/chat`): say *“Find dining like Nobu in Lagos.”* The concierge proposes the exact Qloo lookup — anchor plus city — and waits for your yes. On approval it runs live Qloo Search + Insights and DeepSeek answers grounded ONLY in the returned venues, with Qloo signal, remembered context, and unverified claims kept visibly separate.
 2. **TasteProof visual discovery** (`/taste`): the same live evidence as photographic venue cards — real Qloo photos, descriptions, cultural tags, Qloo affinity (labeled as a ranking signal, never a match percentage), plus anchor correction with a real before/after comparison and one-click Undo.
 
-Missing details are asked, never invented. Denials and unrelated questions never trigger a lookup. Dining turns are session-only: nothing is written to durable memory, and raw memory text never leaves the server.
+Missing details are asked, never invented. Denials and unrelated questions never trigger a lookup. Dining turns are session-only: nothing is written to durable memory, and raw Walrus memory content is never transmitted to Qloo — only approved anchor/city strings and Qloo-returned entity IDs cross that boundary. (Relevant recalled memories may separately be included in DeepSeek prompts; that stays between our server and the chat model.)
 
 ## How we built it
 
@@ -65,7 +65,7 @@ Next.js 16, React 19, TypeScript, Tailwind CSS 4, DeepSeek Flash, Qloo Taste AI 
 
 - Live demo: https://anghkooey.vercel.app/taste
 - Web chat: https://anghkooey.vercel.app/chat
-- Source: https://github.com/Devendurance/anghkooey (MIT, see LICENSE; brand/screenshot assets excluded from the code license grant)
+- Source: https://github.com/Devendurance/anghkooey (MIT covers the original software only, see LICENSE; brand/screenshot assets and third-party Qloo venue photos are excluded from the code license grant)
 - Qloo docs: https://docs.qloo.com/
 
 ## Honest limitations
@@ -74,5 +74,5 @@ Next.js 16, React 19, TypeScript, Tailwind CSS 4, DeepSeek Flash, Qloo Taste AI 
 - Qloo affinity is a ranking signal, not a match probability.
 - Availability, prices, and bookings are never verified.
 - Dining turns are session-only and create no durable memories.
-- The live chat voice pass is owner-verified by browser, not yet recorded on video.
-- Qloo venue photos are displayed with Qloo credit; no separate redistribution license is conveyed — confirm organizer terms before reuse outside this submission.
+- The live agentic chat interaction was already manually verified by the owner in a browser on production; a recorded video is still pending.
+- Qloo venue photos are displayed with Qloo credit under the organizers' confirmed permission to show them in this hackathon entry. MIT covers the original software only — not third-party Qloo photographs; no image ownership or broader licensing rights are claimed. Public README/Devpost screenshot reuse beyond the submission may fall outside that permission — flagged for owner confirmation.

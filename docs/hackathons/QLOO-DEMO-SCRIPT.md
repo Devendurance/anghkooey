@@ -13,9 +13,9 @@ confidence. What if your concierge remembered your taste *and proved it*?”
 
 ## Beat 2 — Consent-based agentic Qloo lookup (0:25–1:00)
 
-**Say:** “I’ll ask for dining like Nobu in Lagos. Watch: it doesn’t fire
+**Say:** “I’ll ask for dining like Nobu in Lagos — typed by hand with memory saving OFF, so nothing is recalled here. Watch: it doesn’t fire
 immediately. It proposes the exact lookup — anchor plus city — and waits for
-my yes. Only those two strings ever leave the chat.”
+my yes. Only those two strings are ever sent to the external Qloo lookup." (The chat model separately receives conversation context to compose its answer.)
 
 **Show (web chat):** send *“Find dining like Nobu in Lagos”* → proposal
 appears → send *“Yes, please.”*
@@ -66,4 +66,4 @@ explained. Your tastes, remembered. Cultural fit, backed by Qloo.”
 
 - No availability, price, rating, or booking claims.
 - No affinity-as-probability language.
-- No unrecorded chat voice-over; the live chat pass is owner-verified by browser only.
+- No unrecorded chat voice-over; the live agentic chat interaction was already manually verified by the owner in a browser — a recorded video is still pending.
