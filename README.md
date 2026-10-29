@@ -225,10 +225,10 @@ flowchart TB
 ```bash
 git clone https://github.com/Devendurance/anghkooey.git
 cd anghkooey
-npm ci --legacy-peer-deps --include=dev
+npm ci
 ```
 
-The peer-dependency flag reflects the repository's current dependency resolution. Don't run `npm audit fix --force` as a substitute.
+Clean `npm ci` with no extra flags is the expected state; peer ranges resolve without `--legacy-peer-deps` or `--force`. Don't run `npm audit fix --force` as a substitute.
 
 ### 2. Configure server secrets
 
