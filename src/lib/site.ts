@@ -12,6 +12,7 @@ export const START_TALKING = {
 export const APP_NAV = [
   { key: "chat", label: "Chat", href: "/chat" },
   { key: "memories", label: "Memories", href: "/memories" },
+  { key: "taste", label: "Taste", href: "/taste" },
   { key: "profile", label: "Profile", href: "/profile" },
   { key: "settings", label: "Settings", href: "/settings" },
 ] as const;
