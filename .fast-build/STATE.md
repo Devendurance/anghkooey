@@ -81,6 +81,13 @@
 - Hero = sticky stage in 300svh (220svh stacked) section, one scrubbed GSAP timeline per gsap.matchMedia branch (split vs stacked). Wordmark is a fixed overlay that docks onto [data-dock-slot] in SiteNav (measured, pixel exact).
 - No orb video supplied: orb is CSS art. Production orb loop still missing.
 
+## Milestone: TasteProof (Qloo Agentic Hackathon) — Session 1 readiness (2026-10-29)
+- Branch: `feat/qloo-tasteproof` from verified `origin/main` baseline `1fe41c6829b3d501fd28d7d01ba2922003f87d8c`. Working tree clean, no merge to main.
+- Dependencies: `npm ci --legacy-peer-deps --include=dev` ok (536 packages), `package-lock.json` preserved. Next 16.4.0, Tailwind 4.3.3, `@tailwindcss/turbopack` 4.3.3 resolve ok.
+- Baseline: typecheck PASS (`next typegen && tsc --noEmit`), prod build PASS (Turbopack, 24 routes), app-scope lint PASS (`src tests workers scripts`), full `npm run lint` shows pre-existing `videos/anghkooey-demo` errors only, mocked tests 205 passed / 60 skipped with 4 failed all real-Neon DB-gated (`getSql`, no `DATABASE_URL`, no `.env`, environmental, not regressions).
+- Qloo access: MISSING. No `QLOO_API_KEY` in shell env, no `.env` file, no Qloo refs in source or `.env.example`. No live `/search` or `/v2/insights` attempted, no fixtures substituted. Hosts `api.qloo.com` and `hackathon.api.qloo.com` both reachable (401 without key); docs at `docs.qloo.com` use `X-Api-Key`. Owner must supply a hackathon key before live verification.
+- Proposed first vertical slice: consented dining preference → server Qloo Search resolve (one public cuisine entity) → Qloo Insights dining recommendations (`filter.type=urn:entity`, explainability) → chat/API reply with entity receipt + inspectable correction. No Gmail, identity-merge, or MemWal changes.
+
 ## Next action
 - 4D.4 integrated QA. Owner: a real Telegram link from /profile (send code to the bot, MERGE YES, Check status) has not been run yet. Owner: reverse-direction recall check and 3x10 evidence still pending. Wanted assets: higher-res ribbon (>=2400px, transparent), production orb loop.
 - Dev gotcha: Next allows one `next dev` per repo dir. A long-running dev server keeps a stale cached env (getEnv) across hotfixes: it sent no DeepSeek `thinking.type` and got 422. For live checks use `next build && next start -p <port>`, or restart dev.
