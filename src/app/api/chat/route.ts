@@ -62,6 +62,7 @@ export async function POST(req: Request) {
       consent,
       traceId: result.traceId,
       model: result.model,
+      dining: result.dining,
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : "chat failed";

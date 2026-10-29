@@ -19,6 +19,13 @@ import {
 } from "./trip-brief";
 import { parseNightlyBudget, searchHotels, type HotelSearchResult } from "./hotels";
 import {
+  buildDiningClarify,
+  buildDiningProposal,
+  executeDiningTurn,
+  extractDiningParams,
+  planDiningTurn,
+} from "./dining";
+import {
   claimInboundEvent,
   DuplicateDeliveryError,
   filterSuperseded,
@@ -63,6 +70,12 @@ export type ChatResult = {
    * account. Callers must never render failure as "no saved memory".
    */
   recallStatus: RecallStatus;
+  /**
+   * Session dining evidence when the agent ran an approved live Qloo
+   * lookup this turn. Null for proposal/clarify/failure turns and all
+   * non-dining turns. Additive; existing consumers ignore it.
+   */
+  dining: { anchor: string; city: string; entityId: string; candidateIds: string[] } | null;
 };
 
 function hash12(v: string): string {
@@ -312,9 +325,44 @@ export async function handleMessage(input: HandleMessageInput): Promise<ChatResu
       ? { ...tripParams, timing: `${stay.checkIn} to ${stay.checkOut}`, nights: stay.nights }
       : tripParams;
   let answer: string;
+  // Agentic dining: explicit request -> approval -> live Qloo -> grounded
+  // answer. Trip keeps precedence when explicit with a destination (the
+  // hotel flow owns those turns). Dining turns stay session-only: no
+  // durable saves are extracted from them, and only anchor/city strings
+  // ever reach Qloo.
+  const diningTurn = planDiningTurn(text, history);
+  const tripWins =
+    tripMode &&
+    tripParams?.destination != null &&
+    (tripExplicit || (tripParams?.nights ?? null) !== null);
+  let diningMessage: string | null = null;
+  let diningEvidence: NonNullable<ChatResult["dining"]> | null = null;
+  if (diningTurn.kind !== "none" && !tripWins) {
+    if (diningTurn.kind === "propose") {
+      diningMessage = buildDiningProposal(diningTurn.anchor, diningTurn.city);
+    } else if (diningTurn.kind === "clarify") {
+      const merged = extractDiningParams([
+        ...history.filter((h) => h.role === "user").map((h) => h.text),
+        text,
+      ]);
+      diningMessage = buildDiningClarify(diningTurn.missing, merged);
+    } else {
+      const done = await executeDiningTurn(diningTurn, {
+        userId: canonicalUserId,
+        userText: text,
+        memories,
+        history,
+        recallStatus,
+        compose: (messages) => chatComplete({ messages, maxTokens: 1000 }),
+      });
+      diningMessage = done.message;
+      diningEvidence = done.evidence;
+    }
+  }
   try {
     answer =
-      tripMode && tripParams
+      diningMessage ??
+      (tripMode && tripParams
         ? await chatComplete({
             messages: buildTripBriefMessages({
               userText: text,
@@ -331,7 +379,7 @@ export async function handleMessage(input: HandleMessageInput): Promise<ChatResu
         : await chatComplete({
             messages: buildGroundedMessages({ userText: text, memories, history, recallStatus }),
             maxTokens: 1000,
-          });
+          }));
   } catch (e) {
     if (hasDb()) {
       try {
@@ -357,7 +405,9 @@ export async function handleMessage(input: HandleMessageInput): Promise<ChatResu
   const saves = { completed: 0, pending: 0, failed: 0 };
   const savedBlobIds: string[] = [];
   const saveAllowed = input.allowMemorySave !== false;
-  if (hasMemory() && saveAllowed) {
+  // Dining turns stay conversational like trip plans: the anchor/city
+  // refine this session only and are never written as durable memories.
+  if (hasMemory() && saveAllowed && diningMessage === null) {
     try {
       const rawJson = await chatComplete({
         messages: [{ role: "user", content: buildExtractionPrompt(text) }],
@@ -501,6 +551,8 @@ export async function handleMessage(input: HandleMessageInput): Promise<ChatResu
       blob_ids: receipts.map((r) => r.blobId),
       saves,
       trip_mode: tripMode,
+      dining_mode: diningTurn.kind,
+      qloo_entity: diningEvidence?.entityId ?? null,
       hotel_status: hotels?.status ?? null,
       hotel_dates:
         stay != null ? `${stay.checkIn}:${stay.checkOut}` : null,
@@ -509,5 +561,5 @@ export async function handleMessage(input: HandleMessageInput): Promise<ChatResu
     })
   );
 
-  return { answer, memoryReceipts: receipts, saves, savedBlobIds, traceId, model, recallStatus };
+  return { answer, memoryReceipts: receipts, saves, savedBlobIds, traceId, model, recallStatus, dining: diningEvidence };
 }
