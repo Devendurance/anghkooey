@@ -21,6 +21,19 @@ export type QlooCandidate = {
   kind: string;
   place: string | null;
   explanation: string | null;
+  /** Real Qloo signal, all optional and null when Qloo omits them. Never invented. */
+  evidence: {
+    /** Qloo venue tags (names only, deduplicated, capped). */
+    tags: string[] | null;
+    /** Qloo's own ranking number for this candidate. Ranking signal only, never a match probability. */
+    affinity: number | null;
+    /** Interest-signal entity this candidate traces to (proves the anchor link). */
+    matchedAnchorId: string | null;
+    /** Venue address string as Qloo lists it. */
+    address: string | null;
+    /** Qloo's own short/overall description, capped. */
+    description: string | null;
+  };
 };
 
 const BASE_DEFAULT = "https://hackathon.api.qloo.com";
@@ -125,6 +138,50 @@ function explanationOf(e: Record<string, unknown>): string | null {
   return null;
 }
 
+function tagsOf(e: Record<string, unknown>): string[] | null {
+  const raw = e.tags;
+  if (!Array.isArray(raw)) return null;
+  const out: string[] = [];
+  for (const t of raw) {
+    const name = (t as Record<string, unknown> | null)?.name;
+    if (typeof name !== "string") continue;
+    const v = name.trim();
+    // Skip Qloo's age-range buckets ("25 29") and dupes; keep real descriptors.
+    if (!v || out.includes(v) || /^[\d\s]+$/.test(v)) continue;
+    out.push(v.slice(0, 40));
+    if (out.length >= 8) break;
+  }
+  return out.length > 0 ? out : null;
+}
+
+function affinityOf(e: Record<string, unknown>): number | null {
+  const q = e.query as Record<string, unknown> | undefined;
+  const a = q?.affinity;
+  return typeof a === "number" && Number.isFinite(a) ? a : null;
+}
+
+function matchedAnchorOf(e: Record<string, unknown>): string | null {
+  const q = e.query as Record<string, unknown> | undefined;
+  const x = q?.explainability as Record<string, unknown> | undefined;
+  const sigs = x?.["signal.interests.entities"];
+  const first = Array.isArray(sigs) ? sigs[0] as Record<string, unknown> | undefined : undefined;
+  return typeof first?.entity_id === "string" ? first.entity_id : null;
+}
+
+function addressOf(e: Record<string, unknown>): string | null {
+  const d = (e as Record<string, unknown>).disambiguation;
+  return typeof d === "string" && d.trim() ? d.trim().slice(0, 160) : null;
+}
+
+function descriptionOf(e: Record<string, unknown>): string | null {
+  const props = e.properties as Record<string, unknown> | undefined;
+  for (const k of ["short_description", "overall_description", "cuisine_description"]) {
+    const v = props?.[k];
+    if (typeof v === "string" && v.trim()) return v.trim().slice(0, 220);
+  }
+  return null;
+}
+
 function placeOf(e: Record<string, unknown>): string | null {
   const loc = e.location as Record<string, unknown> | undefined;
   if (loc && typeof loc === "object") {
@@ -152,6 +209,7 @@ export async function placeInsights(
   let path =
     `/v2/insights?filter.type=urn:entity:place` +
     `&signal.interests.entities=${encodeURIComponent(entityId)}` +
+    `&feature.explainability=true` +
     `&take=${take}`;
   if (city) path += `&filter.location.query=${encodeURIComponent(city)}`;
   const r = await qlooGet(path);
@@ -174,6 +232,13 @@ export async function placeInsights(
       kind: String(e.subtype || e.type || "place"),
       place: placeOf(e),
       explanation: explanationOf(e),
+      evidence: {
+        tags: tagsOf(e),
+        affinity: affinityOf(e),
+        matchedAnchorId: matchedAnchorOf(e),
+        address: addressOf(e),
+        description: descriptionOf(e),
+      },
     });
   }
   return { ok: true, candidates };
