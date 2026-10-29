@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { call, errorMessage, shortBlob } from "@/lib/app-client";
 import { compareTasteCandidates } from "@/lib/taste-evidence";
 import { TasteCard, type Candidate } from "@/components/app/Taste";
@@ -20,7 +20,7 @@ type MultiResult = {
   anchorIds: string[];
 };
 
-const MODEL_ONLY_RECORD = `I can't verify current Lagos restaurants from my training alone, but here are directions to explore: upscale Japanese/Peruvian-fusion spots in Victoria Island or Ikoyi (names mentioned from training, unverified); minimalist, atmospheric chef-led places for the Sakamoto vibe; and a tip to search Instagram and Google Maps and check recent reviews, since Lagos dining changes fast. Verdict before booking: verify any specific venue.`;
+const MODEL_ONLY_SUMMARY = `The model could not verify any current Lagos restaurant from training alone. It suggested directions instead: upscale Japanese/Peruvian-fusion spots in Victoria Island or Ikoyi (naming Nok by Alara and Wakame from training, both flagged unverified), minimalist chef-led rooms for the Sakamoto atmosphere, and a tip to check Instagram, Google Maps and recent reviews before booking.`;
 
 const FRIENDLY: Record<string, string> = {  qloo_no_match: "Qloo has no match for that anchor.",
   qloo_not_configured: "Taste lookup is not configured on this server.",
@@ -48,15 +48,29 @@ export function MultiTaste() {
   const [slots, setSlots] = useState<Slot[] | null>(null);
   const [picks, setPicks] = useState<(SlotEntity | null)[]>([]);
   const [result, setResult] = useState<MultiResult | null>(null);
-  const [trace, setTrace] = useState<{ by: "you" | "server"; text: string }[]>([]);
+  const [trace, setTrace] = useState<{ by: "you" | "server"; text: string; run: number }[]>([]);
   const [baseline, setBaseline] = useState<{ candidates: Candidate[] } | null>(null);
   const [comparing, setComparing] = useState(false);
+  const runRef = useRef(0);
+  const [runId, setRunId] = useState(0);
 
   function log(by: "you" | "server", text: string) {
-    setTrace((t) => [...t, { by, text }]);
+    const run = runRef.current;
+    setTrace((t) => [...t, { by, text, run }]);
+  }
+
+  /** Start a new lookup attempt: abandoned in-flight responses carry the old
+   * generation and must not touch state, slots, approvals, results or trace. */
+  function newRun() {
+    runRef.current += 1;
+    setRunId(runRef.current);
+    return runRef.current;
   }
 
   function invalidate() {
+    newRun();
+    setBusy("idle");
+    setComparing(false);
     setSlots(null);
     setPicks([]);
     setResult(null);
@@ -82,8 +96,10 @@ export function MultiTaste() {
   }
 
   async function resolveAnchors() {
+    if (busy !== "idle") return;
     const anchors = inputs.map((s) => s.trim()).filter((s) => s.length > 0);
     if (anchors.length < 1) return;
+    const run = runRef.current;
     setBusy("resolving");
     setError(null);
     setSlots(null);
@@ -95,6 +111,7 @@ export function MultiTaste() {
       method: "POST",
       body: JSON.stringify({ anchors, city: city.trim() || undefined }),
     });
+    if (run !== runRef.current) return;
     setBusy("idle");
     if (!r.ok) {
       const code = (r.body.error as { code?: string } | undefined)?.code ?? "unknown";
@@ -115,7 +132,19 @@ export function MultiTaste() {
     setResult(null);
     setError(null);
     setBaseline(null);
-    log("you", `Confirmed ${entity.name} [${entity.entity_id}] for anchor ${i + 1}`);
+    // A changed confirmation supersedes the previous combined attempt: drop
+    // trace entries after the latest Search execution, keep the resolve history.
+    setTrace((t) => {
+      let cut = t.length;
+      for (let k = t.length - 1; k >= 0; k--) {
+        if (t[k].run === runRef.current && t[k].by === "server" && t[k].text.indexOf("Qloo Search executed") === 0) {
+          cut = k + 1;
+          break;
+        }
+        if (t[k].run !== runRef.current) break;
+      }
+      return [...t.slice(0, cut), { by: "you" as const, text: `Confirmed ${entity.name} [${entity.entity_id}] for anchor ${i + 1}`, run: runRef.current }];
+    });
   }
 
   const allConfirmed =
@@ -127,6 +156,7 @@ export function MultiTaste() {
   async function discover() {
     if (!slots || !allConfirmed || busy !== "idle") return;
     const entities = picks as SlotEntity[];
+    const run = runRef.current;
     setBusy("discovering");
     setError(null);
     setResult(null);
@@ -140,6 +170,7 @@ export function MultiTaste() {
         city: city.trim() || undefined,
       }),
     });
+    if (run !== runRef.current) return;
     setBusy("idle");
     if (!r.ok) {
       const code = (r.body.error as { code?: string } | undefined)?.code ?? "unknown";
@@ -160,13 +191,14 @@ export function MultiTaste() {
       anchorIds: body.evidence.anchorIds,
     });
     log("server", `Qloo Insights executed once for ${body.evidence.anchorIds.length} confirmed ${body.evidence.anchorIds.length === 1 ? "entity" : "entities"}`);
-    log("you", `Evidence normalized: ${body.candidates.length} venues rendered`);
+    log("server", `Evidence normalized from the live Qloo response: ${body.candidates.length} venues rendered`);
   }
 
   async function compareBaseline() {
     if (!result || comparing || busy !== "idle") return;
     const first = result.resolved[0];
     if (!first) return;
+    const run = runRef.current;
     setComparing(true);
     setError(null);
     log("you", `Approved a single-anchor baseline: ${first.name} alone, same city and settings`);
@@ -178,6 +210,7 @@ export function MultiTaste() {
         city: city.trim() || undefined,
       }),
     });
+    if (run !== runRef.current) return;
     setComparing(false);
     if (!r.ok) {
       const code = (r.body.error as { code?: string } | undefined)?.code ?? "unknown";
@@ -488,10 +521,12 @@ export function MultiTaste() {
           <div className="mem-card">
             <p className="mem-fact">What happens without Qloo (recorded experiment)</p>
             <p className="mem-meta">
-              A model-only answer to the same kind of request, recorded once with no Qloo
-              data — not a live recommendation and not a booking result:
+              One DeepSeek model-only answer to the same kind of request, recorded
+              2026-10-29 with no Qloo data — not a live recommendation and not a booking
+              result. Full prompt, settings and verbatim output: docs/hackathons/
+              QLOO-MODEL-ONLY-BASELINE.md.
             </p>
-            <p className="mem-meta">“{MODEL_ONLY_RECORD}”</p>
+            <p className="mem-meta">{MODEL_ONLY_SUMMARY}</p>
             <p className="mem-meta">
               Lost without Qloo: verified venue IDs, joint photos, per-venue affinity,
               addresses, and per-anchor attribution. Gained risks: named-but-unverified
@@ -503,11 +538,13 @@ export function MultiTaste() {
           </button>
         </div>
       )}
-      {trace.length > 0 && (
+      {trace.filter((t) => t.run === runId).length > 0 && (
         <div className="mem-card" aria-label="Execution trace">
           <p className="mem-fact">What actually ran</p>
           <ol>
-            {trace.map((t, i) => (
+            {trace
+              .filter((t) => t.run === runId)
+              .map((t, i) => (
               <li key={i} className="mem-meta">
                 <span className="mem-badge">{t.by === "you" ? "You approved" : "Server observed"}</span>{" "}
                 {t.text}
@@ -515,8 +552,9 @@ export function MultiTaste() {
             ))}
           </ol>
           <p className="mem-meta">
-            Only completed steps are listed. Your approvals happened in this browser; Qloo
-            actions happened on the server and returned live data.
+            Only completed steps from this attempt are listed. Your approvals happened in
+            this browser; Qloo actions happened on the server and returned live data. This
+            is a session view, not an immutable audit log.
           </p>
         </div>
       )}

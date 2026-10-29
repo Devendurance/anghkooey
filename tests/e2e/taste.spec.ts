@@ -410,6 +410,164 @@ test("stale combined selection fails honestly without Insights", async ({ page }
   await expect(page.getByText(/Joint discovery:/)).toBeHidden();
 });
 
+test("editing an anchor during resolve discards the stale response", async ({ page }) => {
+  const resolvePayload = {
+    ok: true,
+    stage: "multi_resolve",
+    city: "Lagos",
+    anchors: [
+      { anchor: "Nobu Restaurant", outcome: "resolved", resolved: { name: "Nobu Restaurant", entity_id: "QLOO-BEFORE-1", kind: "restaurant" }, searchTotal: 20 },
+    ],
+  };
+  await page.route("**/api/tasteproof**", async (route) => {
+    await new Promise((r) => setTimeout(r, 1200));
+    return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(resolvePayload) });
+  });
+  await page.goto("/taste");
+  await page.getByRole("button", { name: "Resolve anchors" }).click();
+  await page.locator("#multi-anchor-0").fill("Changed Anchor");
+  await expect(page.getByText(/Resolving…/)).toBeHidden({ timeout: 15000 });
+  await expect(page.getByText(/Qloo resolved/i)).toBeHidden();
+  await expect(page.getByText(/What actually ran/i)).toBeHidden();
+  await expect(page.locator("[data-testid=multi-outcome-0]")).toBeHidden();
+});
+
+test("editing city during discovery discards stale recommendations", async ({ page }) => {
+  const resolvePayload = {
+    ok: true,
+    stage: "multi_resolve",
+    city: "Lagos",
+    anchors: [
+      { anchor: "Nobu Restaurant", outcome: "resolved", resolved: { name: "Nobu Restaurant", entity_id: "QLOO-BEFORE-1", kind: "restaurant" }, searchTotal: 20 },
+    ],
+  };
+  const combinedPayload = {
+    ok: true,
+    stage: "multi_candidates",
+    city: "Lagos",
+    anchors: ["Nobu Restaurant"],
+    resolved: [{ name: "Nobu Restaurant", entity_id: "QLOO-BEFORE-1", kind: "restaurant" }],
+    candidates: [{ name: "Stale Venue", entity_id: "STALE-V", kind: "place", place: null, explanation: null }],
+    evidence: { anchorIds: ["QLOO-BEFORE-1"], candidateIds: ["STALE-V"], city: "Lagos" },
+  };
+  await page.route("**/api/tasteproof**", async (route) => {
+    const body = JSON.parse(route.request().postData() ?? "{}") as { entityIds?: string[] };
+    if (body.entityIds) await new Promise((r) => setTimeout(r, 1200));
+    const payload = body.entityIds ? combinedPayload : resolvePayload;
+    return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(payload) });
+  });
+  await page.goto("/taste");
+  await page.getByRole("button", { name: "Resolve anchors" }).click();
+  await expect(page.getByText(/Qloo resolved.*Nobu Restaurant/i).first()).toBeVisible({ timeout: 15000 });
+  await page.getByRole("button", { name: "Confirm Nobu Restaurant for anchor 1" }).click();
+  await page.getByRole("button", { name: "Approve combined discovery" }).click();
+  await page.locator("#multi-city").fill("Abuja");
+  await expect(page.getByText(/Discovering…/)).toBeHidden({ timeout: 15000 });
+  await expect(page.getByText(/Joint discovery:/)).toBeHidden();
+  await expect(page.getByText("Stale Venue")).toBeHidden();
+  await expect(page.getByText(/What actually ran/i)).toBeHidden();
+});
+
+test("start over during a pending request clears state", async ({ page }) => {
+  const resolvePayload = {
+    ok: true,
+    stage: "multi_resolve",
+    city: "Lagos",
+    anchors: [
+      { anchor: "Nobu Restaurant", outcome: "resolved", resolved: { name: "Nobu Restaurant", entity_id: "QLOO-BEFORE-1", kind: "restaurant" }, searchTotal: 20 },
+    ],
+  };
+  const combinedPayload = {
+    ok: true,
+    stage: "multi_candidates",
+    city: "Lagos",
+    anchors: ["Nobu Restaurant"],
+    resolved: [{ name: "Nobu Restaurant", entity_id: "QLOO-BEFORE-1", kind: "restaurant" }],
+    candidates: [{ name: "Stale Venue", entity_id: "STALE-V", kind: "place", place: null, explanation: null }],
+    evidence: { anchorIds: ["QLOO-BEFORE-1"], candidateIds: ["STALE-V"], city: "Lagos" },
+  };
+  await page.route("**/api/tasteproof**", async (route) => {
+    const body = JSON.parse(route.request().postData() ?? "{}") as { entityIds?: string[] };
+    if (body.entityIds) await new Promise((r) => setTimeout(r, 1200));
+    const payload = body.entityIds ? combinedPayload : resolvePayload;
+    return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(payload) });
+  });
+  await page.goto("/taste");
+  await page.getByRole("button", { name: "Resolve anchors" }).click();
+  await expect(page.getByText(/Qloo resolved.*Nobu Restaurant/i).first()).toBeVisible({ timeout: 15000 });
+  await page.getByRole("button", { name: "Confirm Nobu Restaurant for anchor 1" }).click();
+  await page.getByRole("button", { name: "Approve combined discovery" }).click();
+  await page.getByRole("button", { name: "Start over" }).click();
+  await expect(page.locator("#multi-anchor-0")).toHaveValue("Nobu Restaurant");
+  await expect(page.getByText(/Joint discovery:/)).toBeHidden();
+  await expect(page.getByText("Stale Venue")).toBeHidden();
+  await expect(page.getByText(/What actually ran/i)).toBeHidden();
+});
+
+test("stale baseline response is discarded after reset", async ({ page }) => {
+  const resolvePayload = {
+    ok: true,
+    stage: "multi_resolve",
+    city: "Lagos",
+    anchors: [
+      { anchor: "Nobu Restaurant", outcome: "resolved", resolved: { name: "Nobu Restaurant", entity_id: "QLOO-BEFORE-1", kind: "restaurant" }, searchTotal: 20 },
+    ],
+  };
+  const combinedPayload = {
+    ok: true,
+    stage: "multi_candidates",
+    city: "Lagos",
+    anchors: ["Nobu Restaurant"],
+    resolved: [{ name: "Nobu Restaurant", entity_id: "QLOO-BEFORE-1", kind: "restaurant" }],
+    candidates: [{ name: "Joint One", entity_id: "JOINT-A", kind: "place", place: null, explanation: null }],
+    evidence: { anchorIds: ["QLOO-BEFORE-1"], candidateIds: ["JOINT-A"], city: "Lagos" },
+  };
+  const baselinePayload = {
+    ok: true,
+    stage: "multi_candidates",
+    city: "Lagos",
+    anchors: ["Nobu Restaurant"],
+    resolved: [{ name: "Nobu Restaurant", entity_id: "QLOO-BEFORE-1", kind: "restaurant" }],
+    candidates: [{ name: "Stale Baseline", entity_id: "STALE-B", kind: "place", place: null, explanation: null }],
+    evidence: { anchorIds: ["QLOO-BEFORE-1"], candidateIds: ["STALE-B"], city: "Lagos" },
+  };
+  let calls = 0;
+  await page.route("**/api/tasteproof**", async (route) => {
+    const body = JSON.parse(route.request().postData() ?? "{}") as { entityIds?: string[]; anchors?: string[] };
+    calls += 1;
+    const n = calls;
+    if (n === 3) await new Promise((r) => setTimeout(r, 1500));
+    const payload = !body.entityIds ? resolvePayload : n === 3 ? baselinePayload : combinedPayload;
+    return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(payload) });
+  });
+  await page.goto("/taste");
+  await page.getByRole("button", { name: "Resolve anchors" }).click();
+  await expect(page.getByText(/Qloo resolved.*Nobu Restaurant/i).first()).toBeVisible({ timeout: 15000 });
+  await page.getByRole("button", { name: "Confirm Nobu Restaurant for anchor 1" }).click();
+  await page.getByRole("button", { name: "Approve combined discovery" }).click();
+  await expect(page.getByText(/Joint discovery:/).first()).toBeVisible({ timeout: 15000 });
+  await page.getByRole("button", { name: "Compare with Nobu Restaurant alone" }).click();
+  await page.getByRole("button", { name: "Start over" }).click();
+  await expect(page.getByText(/Comparing…/)).toBeHidden({ timeout: 15000 });
+  await expect(page.getByText("Stale Baseline")).toBeHidden();
+  await expect(page.getByText(/alone vs all/i)).toBeHidden();
+});
+
+test("failed resolve produces no success trace", async ({ page }) => {
+  await page.route("**/api/tasteproof**", (route) =>
+    route.fulfill({
+      status: 503,
+      contentType: "application/json",
+      body: JSON.stringify({ ok: false, error: { code: "qloo_unavailable", message: "Qloo is unreachable right now." } }),
+    })
+  );
+  await page.goto("/taste");
+  await page.getByRole("button", { name: "Resolve anchors" }).click();
+  await expect(page.getByText(/Qloo is unreachable/i).first()).toBeVisible({ timeout: 15000 });
+  await expect(page.getByText(/Qloo Search executed/i)).toBeHidden();
+  await expect(page.getByText(/Qloo Insights executed/i)).toBeHidden();
+});
+
 test.afterAll(() => {
   expect(consoleErrors, `unexpected browser errors: ${consoleErrors.join(" | ").slice(0, 500)}`).toEqual([]);
 });
