@@ -1,7 +1,7 @@
 import { clientIp, err, ok } from "@/server/api";
 import { resolveAnchor } from "@/server/qloo";
 import { checkRateLimitStrict, rateLimitedResponse } from "@/server/rate-limit";
-import { createTasteApproval, getApprovalSecret, type ApprovalOp } from "@/server/taste-approval";
+import { checkIssuerAuth, createTasteApproval, getApprovalSecret, type ApprovalOp } from "@/server/taste-approval";
 
 const MAX_ANCHORS = 3;
 const MAX_PROPOSED = 5;
@@ -39,17 +39,28 @@ function cleanProposed(v: unknown): string[] | null {
 }
 
 /**
- * POST /api/tasteapproval — browser confirmation bridge for MCP.
- * Revalidates each anchor:entityId pair against fresh Qloo Search (no
- * Insights), then mints a short-lived HMAC approval bound to the exact
- * inputs + allowed ops. The MCP client presents this artifact; it cannot
- * mint its own (secret never leaves the server). No DB writes.
+ * POST /api/tasteapproval — owner-authorized browser confirmation bridge.
+ * Requires `Authorization: Bearer <TASTEPROOF_ISSUER_TOKEN>` (fail closed:
+ * 503 when the issuer credential is not configured, 401/403 on missing or
+ * rejected credentials). Anonymous sessions, Origin and approved:true are
+ * never treated as authorization. After auth, revalidates each
+ * anchor:entityId pair against fresh Qloo Search (no Insights), then mints
+ * a short-lived input-bound HMAC approval. The MCP client presents the
+ * artifact; it cannot mint its own (signing secret never leaves the
+ * server). No DB writes.
  */
 export async function POST(req: Request) {
+  let text: string;
+  try {
+    text = await req.text();
+  } catch {
+    return err(400, "invalid_input", "Send a JSON body with anchors, entityIds, city and proposed.");
+  }
+  if (Buffer.byteLength(text, "utf8") > MAX_BODY) return err(413, "invalid_input", "That request is too large.");
+  const gate = checkIssuerAuth(req);
+  if (!gate.ok) return err(gate.status, gate.code, gate.message);
   let body: unknown;
   try {
-    const text = await req.text();
-    if (text.length > MAX_BODY) return err(413, "invalid_input", "That request is too large.");
     body = text ? (JSON.parse(text) as unknown) : null;
   } catch {
     return err(400, "invalid_input", "Send a JSON body with anchors, entityIds, city and proposed.");

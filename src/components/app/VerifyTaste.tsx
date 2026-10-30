@@ -73,6 +73,7 @@ export function VerifyTaste() {
   const [result, setResult] = useState<VerifyResult | null>(null);
   const [approval, setApproval] = useState<{ token: string; expiresAt: number } | null>(null);
   const [minting, setMinting] = useState(false);
+  const [copied, setCopied] = useState(false);
   const [trace, setTrace] = useState<{ by: "you" | "server"; text: string; run: number }[]>([]);
   const runRef = useRef(0);
   const [runId, setRunId] = useState(0);
@@ -84,8 +85,10 @@ export function VerifyTaste() {
 
   async function mintApproval() {
     if (!result || minting) return;
+    const run = runRef.current;
     setMinting(true);
     setError(null);
+    setCopied(false);
     const r = await call("/api/tasteapproval", {
       method: "POST",
       body: JSON.stringify({
@@ -96,6 +99,7 @@ export function VerifyTaste() {
         ops: ["verify", "investigate"],
       }),
     });
+    if (run !== runRef.current) return;
     setMinting(false);
     if (!r.ok) {
       const code = (r.body.error as { code?: string } | undefined)?.code ?? "unknown";
@@ -104,7 +108,18 @@ export function VerifyTaste() {
     }
     const body = r.body as unknown as { approval: string; expiresAt: number };
     setApproval({ token: body.approval, expiresAt: body.expiresAt });
-    log("you", "Minted short-lived MCP approval for these exact inputs (10 min, bearer for identical inputs, not one-time)");
+    log("you", "Minted short-lived MCP approval for these exact inputs (10 min, bearer for identical inputs, not one-time; clearing this display does not revoke it)");
+  }
+
+  async function copyApproval() {
+    if (!approval) return;
+    try {
+      await navigator.clipboard.writeText(approval.token);
+      setCopied(true);
+    } catch {
+      setCopied(false);
+      setError({ code: "clipboard", message: "Copy failed in this browser. Select the token text manually." });
+    }
   }
 
   function invalidate() {
@@ -398,14 +413,28 @@ export function VerifyTaste() {
               {result.proposed.join(" | ")} · candidates [{result.evidence.candidateIds.join(", ")}] · single Insights ×{result.execution.insightsRequests}
             </p>
             <div style={{ marginTop: 8 }}>
-              <button type="button" className="mem-seg" onClick={mintApproval} disabled={minting}>
+              <button type="button" className="mem-seg" onClick={mintApproval} disabled={minting || busy !== "idle"}>
                 {minting ? "Minting approval…" : approval ? "Re-mint MCP approval" : "Mint MCP approval for these inputs"}
               </button>
               {approval && (
-                <p className="mem-meta" style={{ marginTop: 8, wordBreak: "break-all" }}>
-                  MCP approval (10 min, input-bound, bearer for identical inputs, not one-time):{" "}
-                  <code>{approval.token.slice(0, 48)}…{approval.token.slice(-12)}</code>
-                </p>
+                <div style={{ marginTop: 8 }}>
+                  <p className="mem-meta">MCP approval — paste into your MCP client. Treat as a short-lived bearer credential:</p>
+                  <p className="mem-meta" style={{ wordBreak: "break-all" }}>
+                    <code>{approval.token}</code>
+                  </p>
+                  <div style={{ display: "flex", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
+                    <button type="button" className="mem-seg" onClick={copyApproval}>
+                      {copied ? "Copied" : "Copy full token"}
+                    </button>
+                    <button type="button" className="mem-seg" onClick={() => { setApproval(null); setCopied(false); }}>
+                      Clear display
+                    </button>
+                  </div>
+                  <p className="mem-meta" style={{ marginTop: 8 }}>
+                    10-minute expiry · bound to these exact anchors, IDs, city, shortlist and operations · bearer for identical inputs until expiry,
+                    not one-time · clearing this display does not revoke an issued token.
+                  </p>
+                </div>
               )}
             </div>
           </div>

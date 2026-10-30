@@ -4,7 +4,11 @@ import { clientIp } from "@/server/api";
 
 const MAX_BODY_BYTES = 32 * 1024;
 
-function allowedHosts(req: Request): string[] {
+/** Trusted server-configured hosts only. Request headers (including
+ * x-forwarded-host) never expand the allowlist: a forged forwarded-host
+ * cannot authorize a request. Configure WEB_BASE_URL / VERCEL_URL for
+ * public hosts; localhost entries cover local dev and QA. */
+function allowedHosts(): string[] {
   const hosts = new Set<string>(["localhost", "127.0.0.1"]);
   const web = process.env.WEB_BASE_URL?.trim();
   if (web) {
@@ -22,10 +26,6 @@ function allowedHosts(req: Request): string[] {
       hosts.add(vercel.split("/")[0]);
     }
   }
-  const fwd = req.headers.get("x-forwarded-host")?.split(",")[0].trim();
-  if (fwd) hosts.add(fwd.split(":")[0]);
-  const host = req.headers.get("host")?.split(":")[0].trim();
-  if (host && (hosts.has(host) || (!web && !vercel))) hosts.add(host);
   return [...hosts];
 }
 
@@ -40,16 +40,26 @@ const handler = createMcpHandler(({ requestInfo }) => {
 }, { responseMode: "json" });
 
 export async function POST(req: Request) {
-  const len = req.headers.get("content-length");
-  if (len && Number(len) > MAX_BODY_BYTES) {
+  // Enforce the cap on actual request bytes: the declared Content-Length
+  // is untrusted (may be missing or wrong), so the body is always read
+  // and measured before dispatch.
+  let text: string;
+  try {
+    text = await req.text();
+  } catch {
+    return Response.json({ jsonrpc: "2.0", error: { code: -32600, message: "Unreadable request body" }, id: null }, { status: 400 });
+  }
+  if (Buffer.byteLength(text, "utf8") > MAX_BODY_BYTES) {
     return Response.json({ jsonrpc: "2.0", error: { code: -32600, message: "Request body too large" }, id: null }, { status: 413 });
   }
-  const hosts = allowedHosts(req);
+  const hosts = allowedHosts();
   const hostRes = hostHeaderValidationResponse(req, hosts);
   if (hostRes) return hostRes;
   const originRes = originValidationResponse(req, hosts);
   if (originRes) return originRes;
-  return handler.fetch(req);
+  // Rebuild the request for the handler: the body stream was consumed above.
+  const fwd = new Request(req.url, { method: req.method, headers: req.headers, body: text });
+  return handler.fetch(fwd);
 }
 
 export async function GET() {

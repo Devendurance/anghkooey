@@ -22,12 +22,38 @@ export type ApprovalPayload = {
   exp: number;
 };
 
-/** Server-only secret: dedicated override or Qloo key (never sent, never logged). */
+/** Server-only signing secret: dedicated credential only (never sent, never logged).
+ * No fallback to QLOO_API_KEY: issuance and provider access use separate secrets. */
 export function getApprovalSecret(): string | null {
   const dedicated = (process.env.TASTEPROOF_APPROVAL_SECRET ?? "").trim();
-  if (dedicated) return dedicated;
-  const qloo = (process.env.QLOO_API_KEY ?? "").trim();
-  return qloo ? qloo : null;
+  return dedicated ? dedicated : null;
+}
+
+/** Owner/developer issuer credential for POST /api/tasteapproval (server-only). */
+export function getIssuerToken(): string | null {
+  const t = (process.env.TASTEPROOF_ISSUER_TOKEN ?? "").trim();
+  return t ? t : null;
+}
+
+/** Fail-closed issuer gate: missing env -> 503; missing/mismatched bearer -> 401/403. */
+export function checkIssuerAuth(req: Request):
+  | { ok: true }
+  | { ok: false; status: number; code: string; message: string } {
+  const expected = getIssuerToken();
+  if (!expected) {
+    return { ok: false, status: 503, code: "issuer_not_configured", message: "Approval issuance is not configured on this server." };
+  }
+  const header = req.headers.get("authorization") ?? "";
+  const m = /^Bearer (.+)$/.exec(header.trim());
+  if (!m) {
+    return { ok: false, status: 401, code: "issuer_unauthorized", message: "Approval minting requires an authorized issuer credential." };
+  }
+  const a = Buffer.from(m[1]);
+  const b = Buffer.from(expected);
+  if (a.length !== b.length || !timingSafeEqual(a, b)) {
+    return { ok: false, status: 403, code: "issuer_forbidden", message: "Issuer credential was rejected." };
+  }
+  return { ok: true };
 }
 
 function b64urlEncode(s: string): string {
