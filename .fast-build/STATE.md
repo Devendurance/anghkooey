@@ -23,7 +23,7 @@
 - Identity rules: no wallet, no email, no fake unlink/delete. Add each route to APP_NAV in src/lib/site.ts only when its page exists.
 
 ## Current slice
-- Option C C3 release candidate DONE (fast-build, feat/tasteproof-verify): CLI-only approval handoff, streamed body cap, full C3 validation. Next: owner Preview smoke + merge decision.
+- Option C demo + Devpost package DONE (ship-slice, feat/tasteproof-verify): 124s 1080p captioned video + Option C docs. Next: owner YouTube upload + Devpost paste + merge decision.
 
 ## Completed
 - Gmail-D test-mode unblock and contact diagnostics (2026-10-18): TEST batches prepare without verified contacts while LIVE keeps the strict gate, execution-time recipient revalidation fails closed on mismatch or missing config, TEST EMAIL headers plus per-hotel association with verified/unverified labeling and [TEST] subjects, classified transport errors (timeout, connection_failed, tls_failed) with validated-IP failover and blocked/rate-limited/provider-error mapping, redirect-to-booking-platform rejection. Verification: 202 passed 31 skipped across 22 suites (DB tests skip without DATABASE_URL in sandbox), typecheck pass, eslint clean, production build pass, git diff --check clean, secret scan clean. No live email sent, no schema changes.

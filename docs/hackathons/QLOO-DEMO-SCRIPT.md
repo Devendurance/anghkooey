@@ -1,82 +1,72 @@
-# TasteProof demo script — 2–3 minutes, OPTIONAL (shot list included)
+# TasteProof demo script — 2–3 minutes, released video `videos/tasteproof-demo/tasteproof-demo-1080p.mp4` (124s, 1080p, captioned)
 
-> No video is required by the Qloo Agentic Hackathon, and none is blocking
-> submission. Use this script only if recording. Every beat below was verified
-> live on production or by recorded automated tests. Do not ad-lib venue names,
-> ratings, or availability.
+> Recorded live against production (`main` @ `139edba`) with real Qloo calls
+> via automated Chromium, plus the sanitized real-MCP transcript. No fixtures
+> presented as live, no credentials on screen, no invented metrics.
+> Captions are burnt into the video; read them below as the narration script.
+> Owner action remaining: upload the MP4 to YouTube and paste the link into
+> the Devpost entry (Devpost accepts no file uploads).
 
-## Beat 1 — Problem / hook (0:00–0:25)
+## Beat 1 — Title / hook (0:00–0:08)
 
-**Say:** “Travel assistants ask what you want every time — and forget why you
-liked anything. Worse, their dining tips invent restaurants with total
-confidence. What if your concierge remembered your taste *and proved it*?”
+**Say:** “AI agents can recommend anything. TasteProof makes them show what the evidence actually supports.”
 
-**Show:** landing page → click into `/taste`.
+**Show:** title card — Anghkooey × Qloo, live on production.
 
-## Beat 2 — Consent-based Qloo lookup (0:25–0:55)
+## Beat 2 — Consent-first discovery (0:08–0:14)
 
-**Say:** “I’ll look up dining in Lagos — typed by hand with memory saving OFF,
-so this demo creates no durable memories and claims nothing about saved
-memories. Watch: nothing fires immediately. First the anchor resolves through
-Qloo Search; I confirm the exact entity; only then does Insights run.”
+**Say:** “First, consent. On the live site, nothing reaches Qloo until a reviewer approves.”
 
-**Show (taste):** anchor `Nobu Restaurant` → **Resolve anchors** → confirm
-`Nobu Restaurant [FF6EE520]`.
+**Show:** production `/taste` — anchor pre-filled, approval gate visible, no auto-lookup.
 
-## Beat 3 — Multi-anchor combined discovery (0:55–1:35)
+## Beat 3 — Reviewer confirms Nobu + Sakamoto (0:14–0:30)
 
-**Say:** “Now add a second reference — Ryuichi Sakamoto — and confirm the
-artist entity. One combined Qloo request, both anchors attributed on every
-venue. Compare with the single-anchor baseline: shared two, Talindo out,
-NOK by Alara in, order flipped — computed from real IDs, not vibes.”
+**Say:** “Two anchors, one city, three AI-proposed venues. The reviewer approves resolving them through Qloo Search. Both names are genuinely ambiguous — so the reviewer picks the exact entities.”
 
-**Show:** add anchor → resolve → confirm both → approval summary →
-**Approve combined discovery** → joint cards → **Compare with Nobu
-Restaurant alone** → added/removed display (screenshots:
-`docs/media/qloo-tasteproof-multi-approval.png`,
-`docs/media/qloo-tasteproof-multi-compare.png`).
+**Show:** `/taste/verify` inputs → Approve resolving → live choice lists → confirm `Nobu Restaurant [FF6EE520]` + `Ryuichi Sakamoto [B0DEDE63]`.
 
-## Beat 4 — Evidence, trace, and the no-Qloo baseline (1:35–2:20)
+## Beat 4 — One combined check, three honest verdicts (0:30–0:54)
 
-**Say:** “Each venue lists which anchors Qloo actually attributes — or says
-the details are unavailable. The trace shows only completed steps: what I
-approved, what the server observed. And without Qloo? A recorded model-only
-answer that hedges and names unverified spots — the difference is the point.”
+**Say:** “Confirmed anchors, city and shortlist on screen. One combined Insights check. OBSERVED means an exact match in this result set. REVIEW means look closer. NOT OBSERVED means absent from these results — never proof a place doesn't exist.”
 
-**Show:** per-venue attribution panel, execution trace
-(`docs/media/qloo-tasteproof-multi-evidence.png`,
-`docs/media/qloo-tasteproof-multi-trace.png`), baseline panel.
+**Show:** Approve verification → report: OBSERVED ILE EROS LAGOS, REVIEW NOK, NOT_OBSERVED Ghost Bistro Xyz → scroll evidence, receipt, limitations.
 
-## Beat 5 — Correction and close (2:20–2:50)
+## Beat 5 — Same verification, callable by another agent (0:54–1:13)
 
-**Say:** “Change your mind? Correct the anchor and it re-resolves — a real
-changed ranking with an Undo that restores without another lookup. Your
-tastes, remembered. Cultural fit, backed by Qloo — with receipts.”
+**Say:** “The same verification, callable by another AI agent. Standard MCP — not a mock. Tools list, capabilities, then verify shortlist with an owner-minted approval. Three provider calls.”
 
-**Show:** correction comparison + Undo → mobile view
-(`docs/media/qloo-tasteproof-comparison.png`,
-`docs/media/qloo-tasteproof-mobile.png`) → repo link.
+**Show:** transcript card — `tools/list` (3 tools), `capabilities` (zero Qloo), `verify_shortlist` coverage 1/1/1, `providerCalls: 3`.
+
+## Beat 6 — Bounded follow-up, unchanged originals (1:13–1:36)
+
+**Say:** “The uncertain venue gets one bounded follow-up. Separate Search evidence, reported alongside — the original REVIEW never changes. A forged approval is rejected with zero provider calls, and the browser never holds tokens.”
+
+**Show:** transcript card — `investigate_gap(target=NOK)`, eligible, additional identities, `providerCalls: 4`, forged → `invalid_approval`; CLI handoff panel screenshot.
+
+## Beat 7 — Receipt and close (1:36–2:04)
+
+**Say:** “Every run ends with a receipt: IDs, counts, explicit limits. Affinity is a ranking signal, never a match percentage. Try it live — no account, no keys. TasteProof: receipts, not vibes.”
+
+**Show:** receipt/limitations card → closing card (`/taste/verify` URL, repo, MCP route).
 
 ## Shot list (all recorded/verified)
 
 | # | Shot | Source |
 |---|------|--------|
-| 1 | Desktop discovery, 3 photo cards | `docs/media/qloo-tasteproof-desktop.png` (Playwright 1440×900, production) |
-| 2 | Evidence close-up (tags/affinity) | `docs/media/qloo-tasteproof-evidence.png` |
-| 3 | Correction comparison + Undo | `docs/media/qloo-tasteproof-comparison.png` |
-| 4 | Mobile discovery | `docs/media/qloo-tasteproof-mobile.png` (390×844) |
-| 5 | Multi-anchor approval summary | `docs/media/qloo-tasteproof-multi-approval.png` (production element capture) |
-| 6 | Per-venue anchor attribution | `docs/media/qloo-tasteproof-multi-evidence.png` (production element capture) |
-| 7 | Single-vs-combined comparison | `docs/media/qloo-tasteproof-multi-compare.png` (production element capture) |
-| 8 | Execution trace | `docs/media/qloo-tasteproof-multi-trace.png` (production element capture) |
-
-Shots 5–8 are text-panel element captures (no venue photographs) from the live
-production run that confirmed Nobu `FF6EE520` + Sakamoto artist `B0DEDE63`.
+| 1 | `/taste` consent gate, live | video 0:08–0:14 (production capture) |
+| 2 | Verify inputs + shortlist | `docs/media/qloo-verify-inputs.png` (production capture) |
+| 3 | Resolve → live choices → confirm both entities | video 0:14–0:30 (production capture) |
+| 4 | Verification report with 3 verdicts | `docs/media/qloo-verify-report.png` + video 0:30–0:54 |
+| 5 | MCP tools/list + capabilities transcript | sanitized real-MCP transcript card (production run, token redacted) |
+| 6 | Verify coverage + provider counts | sanitized real-MCP transcript card (production run) |
+| 7 | Investigate gap + forged rejection | sanitized real-MCP transcript card (production run) |
+| 8 | Owner CLI handoff panel | `docs/media/qloo-verify-handoff.png` (production capture) |
 
 ## Do-not-claim list
 
 - No availability, price, rating, or booking claims.
 - No affinity-as-probability (or cross-request comparison) language.
-- No memory-recall claims: the demo types anchors by hand with saving OFF.
-- No unrecorded chat voice-over; the live agentic chat path is unit-verified
-  and the owner browser pass is pending — say so if asked.
+- No memory-recall claims: anchors are typed by hand with saving OFF.
+- No live tokens on screen: credential-bearing MCP steps use the sanitized transcript only.
+- No fixtures-as-live: every venue, verdict, and count is from recorded production calls.
+- No autonomous-agent claims: the agent checks recommendations; the reviewer approves every step.

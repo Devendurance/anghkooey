@@ -97,6 +97,19 @@ The layout is responsive — the same discovery on a phone:
 
 <p align="center"><img src="./docs/media/qloo-tasteproof-mobile.png" alt="TasteProof dining discovery on a mobile viewport" width="320" /></p>
 
+### Evidence-gated verification (`/taste/verify`) and MCP tools
+
+Reviewers approve resolving 1–3 cultural anchors, confirm each exact Qloo entity, approve one combined Insights check — then receive typed verdicts against an AI-proposed shortlist: **OBSERVED** (exact match in this result set), **REVIEW** (near-match or ambiguous identity), **NOT_OBSERVED** (absent from the bounded set — never proof a venue doesn't exist). Every run ends with a receipt (anchor/candidate IDs, city, call counts) and explicit limitations.
+
+<p align="center"><img src="./docs/media/qloo-verify-inputs.png" alt="TasteProof Verify inputs: cultural anchors, destination city and a proposed venue shortlist awaiting approval" width="900" /></p>
+<p align="center"><img src="./docs/media/qloo-verify-report.png" alt="TasteProof verification report with OBSERVED, REVIEW and NOT OBSERVED verdicts plus supporting Qloo evidence" width="900" /></p>
+<p align="center"><em>Verify: confirmed anchors and shortlist in, typed verdicts with real Qloo evidence out — captured live from production.</em></p>
+
+The same verification is callable by another AI agent over standard MCP (`POST /api/mcp`, Streamable HTTP): `tasteproof_capabilities` (zero Qloo calls), `tasteproof_verify_shortlist` (approval-gated, one combined Insights, deterministic verdicts with trace), `tasteproof_investigate_gap` (at most one extra Search for REVIEW/NOT_OBSERVED targets; original verdicts preserved). Approvals are short-lived input-bound bearer artifacts minted owner-side via `scripts/mint-taste-approval.ts` — the browser never holds tokens, forged/expired/mismatched approvals are rejected with zero provider calls, and all endpoints fail closed when the rate-limit store is unavailable.
+
+<p align="center"><img src="./docs/media/qloo-verify-handoff.png" alt="Owner-only MCP handoff panel explaining the CLI approval workflow" width="900" /></p>
+<p align="center"><em>Owner-gated handoff: the browser shows CLI instructions, never a token.</em></p>
+
 ### Memory honesty
 
 Your saved Walrus memories can suggest a taste anchor (the memory panel mines capitalized names from your own words), but **raw memory content, reasons, and identifiers are never transmitted to Qloo**: Qloo receives the approved anchor/city inputs, resolves the anchor to a Qloo entity, and that Qloo-returned entity ID drives the Insights lookup. Separately, relevant recalled memories may be included in DeepSeek prompts to shape the recommendation text — that stays between our server and the chat model, never Qloo. Dining turns are session-only and never written as durable memories. The demonstration below works with memory saving OFF: “Nobu” is typed by hand, not recalled from a saved memory.
@@ -122,17 +135,20 @@ flowchart LR
 3. Change the anchor to `Terra Kulture`, press **Approve revised Qloo lookup**, and watch the before/after comparison. Press **Undo** to restore.
 4. Multi-anchor: press **Add another anchor**, enter `Ryuichi Sakamoto`, **Resolve anchors**, confirm both entities, review the combined approval summary, press **Approve combined discovery** — expect the joint set with per-venue anchor attribution, then **Compare with Nobu Restaurant alone** and check **What actually ran**.
 5. Or use `/chat`: *“Find dining like Nobu in Lagos”* → say *“Yes”* → confirm the exact entity → grounded recommendation. (Memory panel use is optional; memory saving stays OFF — demo anchors are typed, not recalled.)
+6. Verify AI proposals at `/taste/verify` (anchors and city pre-filled): review the shortlist, **Approve resolving**, confirm both entities, **Approve verification** — expect OBSERVED (ILE EROS LAGOS), REVIEW (NOK), NOT_OBSERVED (Ghost Bistro Xyz) with evidence, receipt and limitations.
+7. Developers: `POST /api/mcp` (Streamable HTTP) → `tools/list`, `tasteproof_capabilities`, then `tasteproof_verify_shortlist` / `tasteproof_investigate_gap` with an owner-minted approval (see `docs/release/C3-TASTEPROOF-RELEASE-CHECKLIST.md`; approval issuance is owner-gated, judges need no credentials to read the capabilities and testing instructions).
 
 ### What was added during the hackathon
 
-Server-only Qloo adapter (Search + Insights with `feature.explainability`, trustworthy entity resolution, per-entity attribution, strict fail-closed rate limiting), `/api/tasteproof` (GET single-anchor + POST multi-anchor with fresh revalidation), the `/taste` page with photographic evidence cards + correction/Undo + multi-anchor combined discovery with single-versus-multi comparison, execution trace, and a recorded no-Qloo baseline, the chat approval gate with entity confirmation and full-message affirmative precision, Qloo-grounded DeepSeek prompting, and synthetic regression suites. Nothing else changed: no migrations, no new infrastructure, no Photon/Gmail/Walrus behavior changes.
+Server-only Qloo adapter (Search + Insights with `feature.explainability`, trustworthy entity resolution, per-entity attribution, strict fail-closed rate limiting), `/api/tasteproof` (GET single-anchor + POST multi-anchor with fresh revalidation), the `/taste` page with photographic evidence cards + correction/Undo + multi-anchor combined discovery with single-versus-multi comparison, execution trace, and a recorded no-Qloo baseline, the chat approval gate with entity confirmation and full-message affirmative precision, Qloo-grounded DeepSeek prompting, and synthetic regression suites. Option C release: `/taste/verify` (evidence-gated shortlist verification with OBSERVED/REVIEW/NOT_OBSERVED, receipt and limitations), `/api/tasteverify` + `/api/tasteapproval` (two-step consent with fresh revalidation), and `POST /api/mcp` (Streamable HTTP tools `tasteproof_capabilities`, `tasteproof_verify_shortlist`, `tasteproof_investigate_gap` with HMAC owner-minted approval bridge). Nothing else changed: no migrations, no new infrastructure, no Photon/Gmail/Walrus behavior changes.
 
 ### Verification evidence and limitations
 
-- Focused suites: 319 passed / 67 intentional skips DB-less (isolated-DB suites skip honestly), incl. adapter parsing, approval consent, correction comparison, multi-anchor contract, rate-limit fail-closed. Desktop/mobile Playwright: 28/28 intercepted journeys (multi-anchor resolve/confirm/discovery, comparison, stale-invalidation, trace) with zero console errors.
+- Focused suites: 351 passed / 67 intentional skips DB-less (isolated-DB suites skip honestly), incl. adapter parsing, approval consent, correction comparison, multi-anchor contract, rate-limit fail-closed, HMAC approval bridge, MCP protocol + header/body hardening. Desktop/mobile Playwright: 42/42 intercepted journeys (multi-anchor resolve/confirm/discovery, comparison, stale-invalidation, trace, verify resolve/confirm/report incl. CLI-handoff, MCP HTTP) with zero console errors.
 - `npm audit --omit=dev`: zero high/critical advisories (18 moderate Spectrum/OTel worker-telemetry advisories with no compatible fix).
-- Live-verified on production: single Nobu → `FF6EE520` + Izanagi / ILE EROS / Talindo; combined Nobu `FF6EE520` + Sakamoto artist `B0DEDE63` → ILE EROS / Izanagi / NOK by Alara with both anchors attributed per venue; all photos load with entity-matched URLs; empty/gibberish anchors return honest errors; stale selections rejected.
-- Limitations: venue notes depend on Qloo coverage (thin venues show names + ranking only); Qloo affinity is a per-request ranking signal, not a match probability and not comparable across requests; availability, prices, and bookings are never verified; the live chat voice still awaits a recorded owner browser pass.
+- Live-verified on production (`main` @ `139edba`, MCP-verified release): single Nobu → `FF6EE520` + Izanagi / ILE EROS / Talindo; combined Nobu `FF6EE520` + Sakamoto artist `B0DEDE63` → ILE EROS / Izanagi / NOK by Alara with both anchors attributed per venue; `/taste/verify` returns OBSERVED (ILE EROS LAGOS) / REVIEW (NOK) / NOT_OBSERVED (Ghost Bistro Xyz) from one combined Insights call; real MCP client over production HTTP confirms tools/list, capabilities, approval-gated verify (3 provider calls), investigate_gap on REVIEW (4 calls, originals unchanged), forged-approval rejection with zero calls; browser journey, all pages, and health checks green.
+- Demo video: `videos/tasteproof-demo/tasteproof-demo-1080p.mp4` (124s, 1080p, captioned) — real production footage plus the sanitized MCP transcript; no credentials, no fixtures-as-live, no invented metrics.
+- Limitations: venue notes depend on Qloo coverage (thin venues show names + ranking only); Qloo affinity is a per-request ranking signal, not a match probability and not comparable across requests; availability, prices, and bookings are never verified; MCP approvals are 10-minute input-bound bearers (replayable for identical inputs, not one-time; clearing a display never revokes); the recorded demo uses automated Chromium against production with real Qloo calls.
 
 ### Product gallery
 
@@ -267,6 +283,8 @@ Edit `.env` locally. Never commit it, paste credentials into issues, or expose k
 | `TELEGRAM_BOT_TOKEN` | Telegram bot credential, for the worker |
 | `QLOO_API_KEY` | Qloo hackathon API credential (server-only; required for TasteProof) |
 | `QLOO_BASE_URL` | Qloo API base URL (optional; defaults to the hackathon endpoint) |
+| `TASTEPROOF_APPROVAL_SECRET` | Signs short-lived MCP approval artifacts (server-only; required for verify/investigate tools) |
+| `TASTEPROOF_ISSUER_TOKEN` | Authorizes `POST /api/tasteapproval` minting (server-only, owner CLI only; the browser never holds it) |
 
 The repository's [`.env.example`](./.env.example) is the canonical variable-name reference.
 

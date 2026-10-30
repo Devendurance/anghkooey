@@ -1,0 +1,67 @@
+1
+00:00:00,500 --> 00:00:07,500
+AI agents can recommend anything. TasteProof makes them show what the evidence actually supports.
+
+2
+00:00:08,500 --> 00:00:15,000
+First, consent. On the live site, nothing reaches Qloo until a reviewer approves.
+
+3
+00:00:15,000 --> 00:00:22,000
+Two anchors, one city, three AI-proposed venues. The reviewer approves resolving them through Qloo Search.
+
+4
+00:00:22,000 --> 00:00:30,000
+Qloo answers with real candidates. Both names are ambiguous, so the reviewer picks the exact entities.
+
+5
+00:00:30,000 --> 00:00:38,000
+Confirmed anchors, city and shortlist on screen. The reviewer approves one combined Insights check.
+
+6
+00:00:38,000 --> 00:00:46,000
+The verdicts: OBSERVED means an exact match in this result set. REVIEW means look closer.
+
+7
+00:00:46,000 --> 00:00:53,500
+NOT OBSERVED means absent from these results. Never proof a place doesn't exist.
+
+8
+00:00:54,000 --> 00:01:00,500
+Same verification, callable by another AI agent. Standard MCP — not a mock.
+
+9
+00:01:01,000 --> 00:01:08,000
+Tools list, capabilities, then verify shortlist with an owner-minted approval. Three provider calls.
+
+10
+00:01:08,000 --> 00:01:15,000
+One observed, one review, one not observed — computed from real Qloo IDs.
+
+11
+00:01:15,000 --> 00:01:22,000
+The uncertain venue gets one bounded follow-up: investigate gap.
+
+12
+00:01:22,000 --> 00:01:29,000
+Separate Search evidence, reported alongside. The original REVIEW verdict never changes.
+
+13
+00:01:29,000 --> 00:01:36,000
+A forged approval is rejected with zero provider calls. The browser never holds tokens.
+
+14
+00:01:36,000 --> 00:01:43,000
+Every run ends with a receipt: IDs, counts, and explicit limits.
+
+15
+00:01:43,000 --> 00:01:50,000
+Affinity is a ranking signal, never a match percentage. Hours and prices are never verified.
+
+16
+00:01:50,000 --> 00:01:57,000
+Try it live: no account, no keys. Reviewers verify; developers call POST /api/mcp.
+
+17
+00:01:57,000 --> 00:02:04,000
+TasteProof: receipts, not vibes.
