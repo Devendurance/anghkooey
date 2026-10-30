@@ -71,6 +71,8 @@ export function VerifyTaste() {
   const [slots, setSlots] = useState<Slot[] | null>(null);
   const [picks, setPicks] = useState<(SlotEntity | null)[]>([]);
   const [result, setResult] = useState<VerifyResult | null>(null);
+  const [approval, setApproval] = useState<{ token: string; expiresAt: number } | null>(null);
+  const [minting, setMinting] = useState(false);
   const [trace, setTrace] = useState<{ by: "you" | "server"; text: string; run: number }[]>([]);
   const runRef = useRef(0);
   const [runId, setRunId] = useState(0);
@@ -80,9 +82,35 @@ export function VerifyTaste() {
     setTrace((t) => [...t, { by, text, run }]);
   }
 
+  async function mintApproval() {
+    if (!result || minting) return;
+    setMinting(true);
+    setError(null);
+    const r = await call("/api/tasteapproval", {
+      method: "POST",
+      body: JSON.stringify({
+        anchors: result.anchors,
+        entityIds: result.resolved.map((e) => e.entity_id),
+        city: result.city,
+        proposed: result.proposed,
+        ops: ["verify", "investigate"],
+      }),
+    });
+    setMinting(false);
+    if (!r.ok) {
+      const code = (r.body.error as { code?: string } | undefined)?.code ?? "unknown";
+      setError({ code, message: friendly(code, errorMessage(r)) });
+      return;
+    }
+    const body = r.body as unknown as { approval: string; expiresAt: number };
+    setApproval({ token: body.approval, expiresAt: body.expiresAt });
+    log("you", "Minted short-lived MCP approval for these exact inputs (10 min, bearer for identical inputs, not one-time)");
+  }
+
   function invalidate() {
     runRef.current += 1;
     setRunId(runRef.current);
+    setApproval(null);
     setBusy("idle");
     setSlots(null);
     setPicks([]);
@@ -369,6 +397,17 @@ export function VerifyTaste() {
               Receipt: {result.anchors.join(" + ")} [{result.evidence.anchorIds.join(", ")}] · {result.evidence.city} · proposed{" "}
               {result.proposed.join(" | ")} · candidates [{result.evidence.candidateIds.join(", ")}] · single Insights ×{result.execution.insightsRequests}
             </p>
+            <div style={{ marginTop: 8 }}>
+              <button type="button" className="mem-seg" onClick={mintApproval} disabled={minting}>
+                {minting ? "Minting approval…" : approval ? "Re-mint MCP approval" : "Mint MCP approval for these inputs"}
+              </button>
+              {approval && (
+                <p className="mem-meta" style={{ marginTop: 8, wordBreak: "break-all" }}>
+                  MCP approval (10 min, input-bound, bearer for identical inputs, not one-time):{" "}
+                  <code>{approval.token.slice(0, 48)}…{approval.token.slice(-12)}</code>
+                </p>
+              )}
+            </div>
           </div>
 
           {trace.length > 0 && (
