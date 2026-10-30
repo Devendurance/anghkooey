@@ -3,10 +3,11 @@
 export type ApiResult = { status: number; ok: boolean; body: Record<string, unknown> };
 
 export async function call(path: string, init?: RequestInit): Promise<ApiResult> {
+  const extra = (init?.headers ?? {}) as Record<string, string>;
   const res = await fetch(path, {
     ...init,
     credentials: "same-origin",
-    headers: init?.body ? { "Content-Type": "application/json" } : undefined,
+    headers: init?.body ? { "Content-Type": "application/json", ...extra } : init?.headers,
   });
   const body = (await res.json().catch(() => ({}))) as Record<string, unknown>;
   return { status: res.status, ok: res.ok && body.ok === true, body };

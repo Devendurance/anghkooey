@@ -202,6 +202,32 @@ test("unavailable store fails closed with retry", async ({ page }) => {
   await expect(page.getByText(/confirm each anchor entity/i)).toBeHidden();
 });
 
+test("report shows owner CLI handoff and never mints from the browser", async ({ page }) => {
+  let approvalCalls = 0;
+  await page.route("**/api/tasteverify**", (route) => {
+    const body = JSON.parse(route.request().postData() ?? "{}") as { step?: string };
+    if (body.step === "verify") {
+      return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(VERIFIED_MIXED) });
+    }
+    return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(RESOLVE_TWO) });
+  });
+  await page.route("**/api/tasteapproval**", (route) => {
+    approvalCalls += 1;
+    return route.fulfill({ status: 401, contentType: "application/json", body: JSON.stringify({ ok: false, error: { code: "issuer_unauthorized", message: "denied" } }) });
+  });
+  await page.goto("/taste/verify");
+  await page.getByRole("button", { name: /approve resolving via qloo search/i }).click();
+  await expect(page.getByText(/confirm each anchor entity/i).first()).toBeVisible({ timeout: 15000 });
+  await page.getByRole("button", { name: /confirm nobu restaurant/i }).click();
+  await page.getByRole("button", { name: /confirm ryuichi sakamoto/i }).click();
+  await page.getByRole("button", { name: /approve verification/i }).click();
+  await expect(page.getByRole("heading", { name: /verification report/i })).toBeVisible({ timeout: 15000 });
+  await expect(page.getByRole("button", { name: /mint .*approval/i })).toBeHidden();
+  await expect(page.getByText(/owner MCP handoff/i).first()).toBeVisible();
+  await expect(page.getByText(/mint-taste-approval/i).first()).toBeVisible();
+  expect(approvalCalls).toBe(0);
+});
+
 test.afterAll(() => {
   expect(consoleErrors, `unexpected browser errors: ${consoleErrors.join(" | ").slice(0, 500)}`).toEqual([]);
 });

@@ -71,9 +71,6 @@ export function VerifyTaste() {
   const [slots, setSlots] = useState<Slot[] | null>(null);
   const [picks, setPicks] = useState<(SlotEntity | null)[]>([]);
   const [result, setResult] = useState<VerifyResult | null>(null);
-  const [approval, setApproval] = useState<{ token: string; expiresAt: number } | null>(null);
-  const [minting, setMinting] = useState(false);
-  const [copied, setCopied] = useState(false);
   const [trace, setTrace] = useState<{ by: "you" | "server"; text: string; run: number }[]>([]);
   const runRef = useRef(0);
   const [runId, setRunId] = useState(0);
@@ -83,49 +80,9 @@ export function VerifyTaste() {
     setTrace((t) => [...t, { by, text, run }]);
   }
 
-  async function mintApproval() {
-    if (!result || minting) return;
-    const run = runRef.current;
-    setMinting(true);
-    setError(null);
-    setCopied(false);
-    const r = await call("/api/tasteapproval", {
-      method: "POST",
-      body: JSON.stringify({
-        anchors: result.anchors,
-        entityIds: result.resolved.map((e) => e.entity_id),
-        city: result.city,
-        proposed: result.proposed,
-        ops: ["verify", "investigate"],
-      }),
-    });
-    if (run !== runRef.current) return;
-    setMinting(false);
-    if (!r.ok) {
-      const code = (r.body.error as { code?: string } | undefined)?.code ?? "unknown";
-      setError({ code, message: friendly(code, errorMessage(r)) });
-      return;
-    }
-    const body = r.body as unknown as { approval: string; expiresAt: number };
-    setApproval({ token: body.approval, expiresAt: body.expiresAt });
-    log("you", "Minted short-lived MCP approval for these exact inputs (10 min, bearer for identical inputs, not one-time; clearing this display does not revoke it)");
-  }
-
-  async function copyApproval() {
-    if (!approval) return;
-    try {
-      await navigator.clipboard.writeText(approval.token);
-      setCopied(true);
-    } catch {
-      setCopied(false);
-      setError({ code: "clipboard", message: "Copy failed in this browser. Select the token text manually." });
-    }
-  }
-
   function invalidate() {
     runRef.current += 1;
     setRunId(runRef.current);
-    setApproval(null);
     setBusy("idle");
     setSlots(null);
     setPicks([]);
@@ -413,29 +370,14 @@ export function VerifyTaste() {
               {result.proposed.join(" | ")} · candidates [{result.evidence.candidateIds.join(", ")}] · single Insights ×{result.execution.insightsRequests}
             </p>
             <div style={{ marginTop: 8 }}>
-              <button type="button" className="mem-seg" onClick={mintApproval} disabled={minting || busy !== "idle"}>
-                {minting ? "Minting approval…" : approval ? "Re-mint MCP approval" : "Mint MCP approval for these inputs"}
-              </button>
-              {approval && (
-                <div style={{ marginTop: 8 }}>
-                  <p className="mem-meta">MCP approval — paste into your MCP client. Treat as a short-lived bearer credential:</p>
-                  <p className="mem-meta" style={{ wordBreak: "break-all" }}>
-                    <code>{approval.token}</code>
-                  </p>
-                  <div style={{ display: "flex", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
-                    <button type="button" className="mem-seg" onClick={copyApproval}>
-                      {copied ? "Copied" : "Copy full token"}
-                    </button>
-                    <button type="button" className="mem-seg" onClick={() => { setApproval(null); setCopied(false); }}>
-                      Clear display
-                    </button>
-                  </div>
-                  <p className="mem-meta" style={{ marginTop: 8 }}>
-                    10-minute expiry · bound to these exact anchors, IDs, city, shortlist and operations · bearer for identical inputs until expiry,
-                    not one-time · clearing this display does not revoke an issued token.
-                  </p>
-                </div>
-              )}
+              <p className="mem-meta">Owner MCP handoff (CLI only — the browser never mints or displays approval tokens):</p>
+              <p className="mem-meta" style={{ marginTop: 4 }}>
+                <code>TASTEPROOF_ISSUER_TOKEN=... npx tsx scripts/mint-taste-approval.ts --base https://&lt;host&gt; --anchors &quot;Nobu Restaurant&quot; --entity-ids &quot;&lt;id&gt;&quot; --city Lagos --proposed &quot;ILE EROS LAGOS&quot;</code>
+              </p>
+              <p className="mem-meta" style={{ marginTop: 4 }}>
+                The script revalidates the exact confirmed inputs server-side and prints a 10-minute input-bound approval plus the MCP tool call order.
+                Keep the approval out of screenshots, logs and chat transcripts.
+              </p>
             </div>
           </div>
 

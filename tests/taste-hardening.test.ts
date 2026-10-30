@@ -147,3 +147,42 @@ describe("mcp transport hardening (synthetic)", () => {
     expect((await mcpPOST(lying)).status).toBe(413);
   });
 });
+
+describe("browser call helper (synthetic)", () => {
+  it("merges caller headers with the JSON default instead of replacing them", async () => {
+    const seen: Array<Record<string, string>> = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockImplementation(async (_url: unknown, init?: RequestInit) => {
+        seen.push(Object.fromEntries(new Headers(init?.headers as HeadersInit).entries()));
+        return new Response(JSON.stringify({ ok: true }), { status: 200 });
+      })
+    );
+    const { call } = await import("@/lib/app-client");
+    await call("/api/tasteapproval", {
+      method: "POST",
+      headers: { Authorization: "Bearer SYNTHETIC" },
+      body: JSON.stringify({ a: 1 }),
+    });
+    expect(seen[0]["content-type"]).toMatch(/application\/json/);
+    expect(seen[0]["authorization"]).toBe("Bearer SYNTHETIC");
+  });
+});
+
+describe("owner CLI handoff script (synthetic)", () => {
+  it("prints usage with --help and refuses to mint without an issuer token", async () => {
+    const { execFile } = await import("node:child_process");
+    const run = (args: string[], env: NodeJS.ProcessEnv) =>
+      new Promise<{ code: number; out: string }>((resolve) => {
+        execFile("npx", ["tsx", "scripts/mint-taste-approval.ts", ...args], { cwd: process.cwd(), env, timeout: 90000 }, (err, stdout, stderr) => {
+          resolve({ code: err && typeof (err as { code?: number }).code === "number" ? ((err as { code?: number }).code as number) : 0, out: `${stdout}${stderr}` });
+        });
+      });
+    const help = await run(["--help"], { ...process.env });
+    expect(help.code).toBe(0);
+    expect(help.out).toMatch(/TASTEPROOF_ISSUER_TOKEN/);
+    const noToken = await run(["--base", "http://localhost:3000"], { ...process.env, TASTEPROOF_ISSUER_TOKEN: "" });
+    expect(noToken.code).toBe(1);
+    expect(noToken.out).toMatch(/Missing TASTEPROOF_ISSUER_TOKEN/);
+  }, 120000);
+});
