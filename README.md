@@ -58,16 +58,20 @@ A quiet hotel room matters differently when you've said road noise kept you awak
 
 > **Hackathon addition (October 2026):** TasteProof connects Anghkooey's memory-aware concierge to [Qloo's](https://www.qloo.com/) cultural-intelligence API. The rest of Anghkooey — DeepSeek chat, Walrus memories, Neon identity, Photon messaging — is the pre-existing product; Qloo is the new taste layer.
 
-**Problem:** travel assistants forget why you liked a place, and generic "best restaurants" lists ignore your taste. **Solution:** Anghkooey resolves a named cultural anchor you approve (e.g. *Nobu Restaurant*) through live Qloo Search, reruns Qloo Insights for the destination city, and grounds its recommendation ONLY in the venues Qloo actually returns — with photos, tags, affinity, and an explicit correction/Undo loop.
+**Problem:** travel assistants forget why you liked a place, and generic "best restaurants" lists ignore your taste. **Solution:** Anghkooey resolves named cultural anchors you approve (e.g. *Nobu Restaurant*) through live Qloo Search, confirms each exact entity, then runs Qloo Insights for the destination city — grounding recommendations ONLY in the venues Qloo actually returns, with photos, tags, affinity, and explicit correction/Undo plus a live single-versus-multi comparison.
+
+**Multi-anchor proof (live, production):** confirm Nobu Restaurant (`FF6EE520`) plus Ryuichi Sakamoto (`B0DEDE63`, provider-typed artist) in Lagos — one combined Insights request returns ILE EROS LAGOS, Izanagi Japanese Cuisine, and NOK by Alara with both anchors attributed on every venue, versus the single-anchor baseline (Izanagi, ILE EROS, Talindo). Text-panel evidence below is captured from the deployed app during release verification; venue photographs appear only in the previously approved card shots (credit: Qloo).
 
 <p align="center"><img src="./docs/media/qloo-tasteproof-desktop.png" alt="TasteProof dining discovery on desktop: three photographic Qloo venue cards for Lagos with tags and affinity" width="900" /></p>
+<p align="center"><img src="./docs/media/qloo-tasteproof-multi-approval.png" alt="Combined approval summary naming both confirmed entities before the joint lookup" width="900" /></p>
+<p align="center"><em>Top: single-anchor discovery. Below: multi-anchor combined approval (Nobu + Sakamoto) captured live from production — text panel, no new photo footprint.</em></p>
 <p align="center"><em>TasteProof discovery: “Nobu Restaurant” in Lagos → Izanagi Japanese Cuisine, ILE EROS LAGOS, Talindo Steak House. Photos: Qloo.</em></p>
 
 ### How the agentic flow works
 
 1. **You ask in web chat** (`/chat`): *“Find dining like Nobu in Lagos.”*
 2. **The concierge proposes — it does not fire yet:** it names the exact anchor and city and asks for a yes. No external Qloo lookup fires until you approve.
-3. **On approval it runs live Qloo Search + Insights** (server-side, strict per-user rate limit, only the anchor/city strings cross to Qloo).
+3. **On approval it runs live Qloo Search first, then waits for entity confirmation** (exact name, type, and ID shown; ambiguous names present choices; stale selections are rejected). Only a freshly confirmed entity ID drives Qloo Insights (server-side, strict per-user rate limit, only approved strings cross to Qloo).
 4. **DeepSeek answers grounded in the returned venues only**, separating (a) Qloo's cultural signal, (b) your remembered preferences, and (c) what is NOT verified (availability, prices, bookings).
 5. **Missing details are asked, never invented:** no city → it asks for one; no named anchor → it asks for one and won't guess.
 6. **Corrections re-propose:** *“make it Terra”* starts a new proposal needing a fresh yes; denials and unrelated questions never trigger a lookup.
@@ -83,6 +87,11 @@ Change the anchor and TasteProof reruns Qloo, showing a real before/after compar
 
 <p align="center"><img src="./docs/media/qloo-tasteproof-comparison.png" alt="TasteProof before/after comparison after correcting the anchor to Terra Kulture, with Undo control" width="900" /></p>
 <p align="center"><em>Anchor correction: Nobu → Terra Kulture. Real changed candidates, honest unchanged states, one-click Undo.</em></p>
+
+<p align="center"><img src="./docs/media/qloo-tasteproof-multi-evidence.png" alt="Per-venue anchor attribution mapping Qloo explainability to the approved anchor names" width="900" /></p>
+<p align="center"><img src="./docs/media/qloo-tasteproof-multi-compare.png" alt="Single-versus-combined comparison with added and removed venues" width="900" /></p>
+<p align="center"><img src="./docs/media/qloo-tasteproof-multi-trace.png" alt="Execution trace distinguishing You-approved steps from Server-observed Qloo actions" width="900" /></p>
+<p align="center"><em>Multi-anchor evidence (live production captures, text panels): per-venue anchor attribution, single-versus-combined comparison, and the execution trace.</em></p>
 
 The layout is responsive — the same discovery on a phone:
 
@@ -109,19 +118,21 @@ flowchart LR
 ### Try it (no credentials needed)
 
 1. Open https://anghkooey.vercel.app/taste — anchor and city are pre-filled (`Nobu Restaurant`, `Lagos`).
-2. Press **Find dining candidates**. Real Qloo venues appear with photos and evidence.
+2. Press **Find dining candidates**, confirm the `FF6EE520` entity. Real Qloo venues appear with photos and evidence.
 3. Change the anchor to `Terra Kulture`, press **Approve revised Qloo lookup**, and watch the before/after comparison. Press **Undo** to restore.
-4. Or use `/chat`: *“Find dining like Nobu in Lagos”* → say *“Yes”* → grounded recommendation. (Memory panel use is optional; memory saving can stay OFF — the demo anchor is typed, not recalled.)
+4. Multi-anchor: press **Add another anchor**, enter `Ryuichi Sakamoto`, **Resolve anchors**, confirm both entities, review the combined approval summary, press **Approve combined discovery** — expect the joint set with per-venue anchor attribution, then **Compare with Nobu Restaurant alone** and check **What actually ran**.
+5. Or use `/chat`: *“Find dining like Nobu in Lagos”* → say *“Yes”* → confirm the exact entity → grounded recommendation. (Memory panel use is optional; memory saving stays OFF — demo anchors are typed, not recalled.)
 
 ### What was added during the hackathon
 
-Server-only Qloo adapter (Search + Insights with `feature.explainability`, strict fail-closed rate limiting), `/api/tasteproof`, the `/taste` page with photographic evidence cards + correction/Undo, the chat approval gate with full-message affirmative precision, Qloo-grounded DeepSeek prompting, and synthetic regression suites. Nothing else changed: no migrations, no new infrastructure, no Photon/Gmail/Walrus behavior changes.
+Server-only Qloo adapter (Search + Insights with `feature.explainability`, trustworthy entity resolution, per-entity attribution, strict fail-closed rate limiting), `/api/tasteproof` (GET single-anchor + POST multi-anchor with fresh revalidation), the `/taste` page with photographic evidence cards + correction/Undo + multi-anchor combined discovery with single-versus-multi comparison, execution trace, and a recorded no-Qloo baseline, the chat approval gate with entity confirmation and full-message affirmative precision, Qloo-grounded DeepSeek prompting, and synthetic regression suites. Nothing else changed: no migrations, no new infrastructure, no Photon/Gmail/Walrus behavior changes.
 
 ### Verification evidence and limitations
 
-- Focused suites: 69/69 pass DB-less (adapter parsing incl. malformed upstream, approval consent incl. 15 accepts / 12 rejects with zero-Qloo proofs, correction comparison, rate-limit fail-closed). Desktop/mobile Playwright: 12/12 intercepted journeys + live-screenshot runs with zero console errors and zero failed requests.
-- Live-verified on production: Nobu → `FF6EE520` + 3 Lagos venues; Terra → `B15A3789` + 3 changed venues; all 3 photos load (`200 image/jpeg`) with entity-matched URLs; empty/gibberish anchors return honest errors.
-- Limitations: venue notes depend on Qloo coverage (thin venues show names + ranking only); Qloo affinity is a ranking signal, not a match probability; availability, prices, and bookings are never verified; the live chat voice still awaits a recorded owner browser pass.
+- Focused suites: 319 passed / 67 intentional skips DB-less (isolated-DB suites skip honestly), incl. adapter parsing, approval consent, correction comparison, multi-anchor contract, rate-limit fail-closed. Desktop/mobile Playwright: 28/28 intercepted journeys (multi-anchor resolve/confirm/discovery, comparison, stale-invalidation, trace) with zero console errors.
+- `npm audit --omit=dev`: zero high/critical advisories (18 moderate Spectrum/OTel worker-telemetry advisories with no compatible fix).
+- Live-verified on production: single Nobu → `FF6EE520` + Izanagi / ILE EROS / Talindo; combined Nobu `FF6EE520` + Sakamoto artist `B0DEDE63` → ILE EROS / Izanagi / NOK by Alara with both anchors attributed per venue; all photos load with entity-matched URLs; empty/gibberish anchors return honest errors; stale selections rejected.
+- Limitations: venue notes depend on Qloo coverage (thin venues show names + ranking only); Qloo affinity is a per-request ranking signal, not a match probability and not comparable across requests; availability, prices, and bookings are never verified; the live chat voice still awaits a recorded owner browser pass.
 
 ### Product gallery
 

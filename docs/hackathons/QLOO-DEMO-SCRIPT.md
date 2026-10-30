@@ -1,7 +1,9 @@
-# TasteProof demo script — 2–3 minutes (shot list included)
+# TasteProof demo script — 2–3 minutes, OPTIONAL (shot list included)
 
-> Every beat below was verified live on production or by recorded automated
-> tests. Do not ad-lib venue names, ratings, or availability.
+> No video is required by the Qloo Agentic Hackathon, and none is blocking
+> submission. Use this script only if recording. Every beat below was verified
+> live on production or by recorded automated tests. Do not ad-lib venue names,
+> ratings, or availability.
 
 ## Beat 1 — Problem / hook (0:00–0:25)
 
@@ -11,47 +13,49 @@ confidence. What if your concierge remembered your taste *and proved it*?”
 
 **Show:** landing page → click into `/taste`.
 
-## Beat 2 — Consent-based agentic Qloo lookup (0:25–1:00)
+## Beat 2 — Consent-based Qloo lookup (0:25–0:55)
 
-**Say:** “I’ll ask for dining like Nobu in Lagos — typed by hand with memory saving OFF, so this demo creates no new durable memories, and it makes no claim about any existing saved memories. Watch: it doesn’t fire
-immediately. It proposes the exact lookup — anchor plus city — and waits for
-my yes. Only those two strings are ever sent to the external Qloo lookup." (The chat model separately receives conversation context to compose its answer.)
+**Say:** “I’ll look up dining in Lagos — typed by hand with memory saving OFF,
+so this demo creates no durable memories and claims nothing about saved
+memories. Watch: nothing fires immediately. First the anchor resolves through
+Qloo Search; I confirm the exact entity; only then does Insights run.”
 
-**Show (web chat):** send *“Find dining like Nobu in Lagos”* → proposal
-appears → send *“Yes, please.”*
+**Show (taste):** anchor `Nobu Restaurant` → **Resolve anchors** → confirm
+`Nobu Restaurant [FF6EE520]`.
 
-## Beat 3 — Live evidence-grounded recommendations (1:00–1:40)
+## Beat 3 — Multi-anchor combined discovery (0:55–1:35)
 
-**Say:** “This is a live Qloo Search plus Insights call. The answer may only
-mention returned venues — each tied to its Qloo tags — with memory context
-kept separate and a plain list of what isn’t verified.”
+**Say:** “Now add a second reference — Ryuichi Sakamoto — and confirm the
+artist entity. One combined Qloo request, both anchors attributed on every
+venue. Compare with the single-anchor baseline: shared two, Talindo out,
+NOK by Alara in, order flipped — computed from real IDs, not vibes.”
 
-**Show:** grounded answer naming Izanagi Japanese Cuisine, ILE EROS LAGOS,
-Talindo Steak House.
+**Show:** add anchor → resolve → confirm both → approval summary →
+**Approve combined discovery** → joint cards → **Compare with Nobu
+Restaurant alone** → added/removed display (screenshots:
+`docs/media/qloo-tasteproof-multi-approval.png`,
+`docs/media/qloo-tasteproof-multi-compare.png`).
 
-## Beat 4 — TasteProof photographic cards (1:40–2:05)
+## Beat 4 — Evidence, trace, and the no-Qloo baseline (1:35–2:20)
 
-**Say:** “The same evidence as inspectable cards: real Qloo photos, real
-tags, affinity labeled as Qloo’s ranking signal — never a match percentage.”
+**Say:** “Each venue lists which anchors Qloo actually attributes — or says
+the details are unavailable. The trace shows only completed steps: what I
+approved, what the server observed. And without Qloo? A recorded model-only
+answer that hedges and names unverified spots — the difference is the point.”
 
-**Show:** `/taste` cards (screenshot: `docs/media/qloo-tasteproof-desktop.png`;
-close-up: `docs/media/qloo-tasteproof-evidence.png`).
+**Show:** per-venue attribution panel, execution trace
+(`docs/media/qloo-tasteproof-multi-evidence.png`,
+`docs/media/qloo-tasteproof-multi-trace.png`), baseline panel.
 
-## Beat 5 — Terra correction, before/after and Undo (2:05–2:40)
+## Beat 5 — Correction and close (2:20–2:50)
 
-**Say:** “Change your mind? Correct the anchor and it reruns Qloo — a real
-changed ranking with an Undo that restores without another lookup.”
+**Say:** “Change your mind? Correct the anchor and it re-resolves — a real
+changed ranking with an Undo that restores without another lookup. Your
+tastes, remembered. Cultural fit, backed by Qloo — with receipts.”
 
-**Show:** enter `Terra Kulture` → approve → comparison + Undo → press Undo,
-Nobu results restored (screenshot: `docs/media/qloo-tasteproof-comparison.png`).
-
-## Beat 6 — What makes Qloo indispensable (2:40–3:00)
-
-**Say:** “With optional user-consented memory, Anghkooey can recall that you liked Nobu — but this demo types the anchor by hand and proves nothing about saved-memory recall. Qloo turns an approved anchor into discovery —
-ranked, photographed venues in a city I don’t know, with the cultural fit
-explained. Your tastes, remembered. Cultural fit, backed by Qloo.”
-
-**Show:** mobile view (`docs/media/qloo-tasteproof-mobile.png`) → repo link.
+**Show:** correction comparison + Undo → mobile view
+(`docs/media/qloo-tasteproof-comparison.png`,
+`docs/media/qloo-tasteproof-mobile.png`) → repo link.
 
 ## Shot list (all recorded/verified)
 
@@ -61,9 +65,18 @@ explained. Your tastes, remembered. Cultural fit, backed by Qloo.”
 | 2 | Evidence close-up (tags/affinity) | `docs/media/qloo-tasteproof-evidence.png` |
 | 3 | Correction comparison + Undo | `docs/media/qloo-tasteproof-comparison.png` |
 | 4 | Mobile discovery | `docs/media/qloo-tasteproof-mobile.png` (390×844) |
+| 5 | Multi-anchor approval summary | `docs/media/qloo-tasteproof-multi-approval.png` (production element capture) |
+| 6 | Per-venue anchor attribution | `docs/media/qloo-tasteproof-multi-evidence.png` (production element capture) |
+| 7 | Single-vs-combined comparison | `docs/media/qloo-tasteproof-multi-compare.png` (production element capture) |
+| 8 | Execution trace | `docs/media/qloo-tasteproof-multi-trace.png` (production element capture) |
+
+Shots 5–8 are text-panel element captures (no venue photographs) from the live
+production run that confirmed Nobu `FF6EE520` + Sakamoto artist `B0DEDE63`.
 
 ## Do-not-claim list
 
 - No availability, price, rating, or booking claims.
-- No affinity-as-probability language.
-- No unrecorded chat voice-over; the live agentic chat interaction was already manually verified by the owner in a browser — a recorded video is still pending.
+- No affinity-as-probability (or cross-request comparison) language.
+- No memory-recall claims: the demo types anchors by hand with saving OFF.
+- No unrecorded chat voice-over; the live agentic chat path is unit-verified
+  and the owner browser pass is pending — say so if asked.
